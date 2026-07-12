@@ -65,7 +65,6 @@ When inviting the bot, use an OAuth2 URL with scopes `bot` + `applications.comma
 
 ```bash
 just dev      # development (watch mode)
-just start    # production
 ```
 
 Or without Just:
