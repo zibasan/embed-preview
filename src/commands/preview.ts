@@ -8,6 +8,7 @@ import {
 import { extractMessageLinks } from "../utils/urlParser.ts";
 import { fetchTargetMessage } from "../utils/fetcher.ts";
 import { buildPreviewPayload } from "../utils/previewCore.ts";
+import { settingCommand } from "./settings.ts";
 
 export const previewCommand = new SlashCommandBuilder()
   .setName("preview")
@@ -71,6 +72,6 @@ export async function registerSlashCommands(client: Client, token: string): Prom
   if (!clientId) return;
 
   await rest.put(Routes.applicationCommands(clientId), {
-    body: [previewCommand.toJSON()],
+    body: [previewCommand.toJSON(), settingCommand.toJSON()],
   });
 }

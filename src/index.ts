@@ -2,6 +2,7 @@ import { type ChatInputCommandInteraction, Client, Events, GatewayIntentBits } f
 import { config } from "dotenv";
 import { registerMessageCreateEvent } from "./events/messageCreate.ts";
 import { handlePreviewCommand, registerSlashCommands } from "./commands/preview.ts";
+import { handleSettingCommand } from "./commands/settings.ts";
 import { isOpenOriginalButton } from "./utils/buttons.ts";
 
 config();
@@ -36,6 +37,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
   try {
     if (interaction.isChatInputCommand() && interaction.commandName === "preview") {
       await handlePreviewCommand(interaction as ChatInputCommandInteraction, client);
+      return;
+    }
+
+    if (interaction.isChatInputCommand() && interaction.commandName === "settings") {
+      await handleSettingCommand(interaction as ChatInputCommandInteraction, client);
       return;
     }
 
