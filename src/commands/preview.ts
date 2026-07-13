@@ -20,16 +20,22 @@ export async function handlePreviewCommand(
   interaction: ChatInputCommandInteraction,
   client: Client,
 ): Promise<void> {
-  await interaction.deferReply();
+  try {
+    await interaction.deferReply();
+  } catch (err) {
+    console.error("[preview] Failed to defer reply:", err);
+    return;
+  }
 
   const link = interaction.options.getString("link", true);
   const links = extractMessageLinks(link);
 
   if (links.length === 0) {
-    await interaction.followUp({
-      content: "Invalid message link.",
-      ephemeral: true,
-    });
+    try {
+      await interaction.followUp({ content: "Invalid message link.", ephemeral: true });
+    } catch (err) {
+      console.error("[preview] Failed to send invalid-link response:", err);
+    }
     return;
   }
 
@@ -37,21 +43,26 @@ export async function handlePreviewCommand(
   const result = await fetchTargetMessage(client, guildId, channelId, messageId);
 
   if (!result) {
-    await interaction.followUp({
-      content: "Message not found.",
-      ephemeral: true,
-    });
+    try {
+      await interaction.followUp({ content: "Message not found.", ephemeral: true });
+    } catch (err) {
+      console.error("[preview] Failed to send not-found response:", err);
+    }
     return;
   }
 
   const { message, channel } = result;
   const payload = await buildPreviewPayload(message, channel, guildId, channelId, messageId);
 
-  await interaction.followUp({
-    embeds: payload.embeds,
-    files: payload.files,
-    components: payload.components,
-  });
+  try {
+    await interaction.followUp({
+      embeds: payload.embeds,
+      files: payload.files,
+      components: payload.components,
+    });
+  } catch (err) {
+    console.error("[preview] Failed to send preview response:", err);
+  }
 }
 
 export async function registerSlashCommands(client: Client, token: string): Promise<void> {

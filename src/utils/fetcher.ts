@@ -54,7 +54,7 @@ export async function fetchTargetMessage(
           channel = thread;
           break;
         } catch {
-          // このスレッドにはない、次へ
+          console.debug(`[fetcher] Message ${messageId} not in thread, trying next`);
         }
       }
     } catch (err) {

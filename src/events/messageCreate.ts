@@ -17,7 +17,11 @@ export function registerMessageCreateEvent(client: Client): void {
     if (links.length === 0) return;
 
     for (const link of links) {
-      await previewMessageLink(client, message, link.guildId, link.channelId, link.messageId);
+      try {
+        await previewMessageLink(client, message, link.guildId, link.channelId, link.messageId);
+      } catch (err) {
+        console.error("[messageCreate] Failed to preview message link:", err);
+      }
     }
   });
 }
