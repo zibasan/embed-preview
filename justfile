@@ -6,10 +6,6 @@ default:
 dev:
     bun run dev
 
-# Production start
-start:
-    bun src/index.ts
-
 # Lint check
 lint:
     bun run lint:check
