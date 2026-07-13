@@ -90,9 +90,13 @@ export async function previewMessageLink(
   const { message, channel } = result;
   const payload = await buildPreviewPayload(message, channel, guildId, channelId, messageId);
 
-  await sourceMessage.reply({
-    embeds: payload.embeds,
-    files: payload.files,
-    components: payload.components,
-  });
+  try {
+    await sourceMessage.reply({
+      embeds: payload.embeds,
+      files: payload.files,
+      components: payload.components,
+    });
+  } catch (err) {
+    console.error("[previewCore] Failed to reply with preview:", err);
+  }
 }

@@ -24,24 +24,32 @@ registerMessageCreateEvent(client);
 
 client.on(Events.ClientReady, async (readyClient) => {
   console.log(`[index] Bot logged in as ${readyClient.user.tag}`);
-  await registerSlashCommands(readyClient, TOKEN);
-  console.log("[index] Slash commands registered");
+  try {
+    await registerSlashCommands(readyClient, TOKEN);
+    console.log("[index] Slash commands registered");
+  } catch (err) {
+    console.error("[index] Failed to register slash commands:", err);
+  }
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
-  if (interaction.isChatInputCommand() && interaction.commandName === "preview") {
-    await handlePreviewCommand(interaction as ChatInputCommandInteraction, client);
-    return;
-  }
+  try {
+    if (interaction.isChatInputCommand() && interaction.commandName === "preview") {
+      await handlePreviewCommand(interaction as ChatInputCommandInteraction, client);
+      return;
+    }
 
-  if (isOpenOriginalButton(interaction)) {
-    const row = interaction.message.components[0];
-    const urlComponent = row && "components" in row ? row.components[1] : undefined;
-    const originalUrl =
-      urlComponent && "url" in urlComponent && urlComponent.url != null
-        ? urlComponent.url
-        : "メッセージリンクが見つかりません";
-    await interaction.reply({ content: originalUrl, ephemeral: true });
+    if (isOpenOriginalButton(interaction)) {
+      const row = interaction.message.components[0];
+      const urlComponent = row && "components" in row ? row.components[1] : undefined;
+      const originalUrl =
+        urlComponent && "url" in urlComponent && urlComponent.url != null
+          ? urlComponent.url
+          : "メッセージリンクが見つかりません";
+      await interaction.reply({ content: originalUrl, ephemeral: true });
+    }
+  } catch (err) {
+    console.error("[index] InteractionCreate handler error:", err);
   }
 });
 
