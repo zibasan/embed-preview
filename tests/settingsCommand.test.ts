@@ -17,6 +17,7 @@ function createMockInteraction(options: {
 }) {
   const deferReply = vi.fn().mockResolvedValue(undefined);
   const followUp = vi.fn().mockResolvedValue(undefined);
+  const reply = vi.fn().mockResolvedValue(undefined);
 
   const getString = vi.fn().mockImplementation((name: string) => {
     if (name === "type") return options.type ?? null;
@@ -38,6 +39,7 @@ function createMockInteraction(options: {
   return {
     deferReply,
     followUp,
+    reply,
     guildId: options.guildId !== undefined ? options.guildId : "guild_123",
     options: mockOpts,
   } as unknown as ChatInputCommandInteraction;
@@ -56,6 +58,7 @@ describe("Settings Command Handler", () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     if (fs.existsSync(TEST_FILE)) {
       try {
         await fs.promises.unlink(TEST_FILE);
@@ -75,8 +78,8 @@ describe("Settings Command Handler", () => {
 
     await handleSettingCommand(interaction, {} as Client);
 
-    expect(interaction.deferReply).toHaveBeenCalled();
-    expect(interaction.followUp).toHaveBeenCalledWith(
+    expect(interaction.deferReply).not.toHaveBeenCalled();
+    expect(interaction.reply).toHaveBeenCalledWith(
       expect.objectContaining({
         content: "このコマンドはサーバー内でのみ実行できます。",
         ephemeral: true,
@@ -95,8 +98,8 @@ describe("Settings Command Handler", () => {
 
     await handleSettingCommand(interaction, {} as Client);
 
-    expect(interaction.deferReply).toHaveBeenCalled();
-    expect(interaction.followUp).toHaveBeenCalledWith({
+    expect(interaction.deferReply).not.toHaveBeenCalled();
+    expect(interaction.reply).toHaveBeenCalledWith({
       content: "対話的設定UIは未実装です",
     });
   });
@@ -112,7 +115,8 @@ describe("Settings Command Handler", () => {
 
     await handleSettingCommand(interaction, {} as Client);
 
-    expect(interaction.followUp).toHaveBeenCalledWith(
+    expect(interaction.deferReply).not.toHaveBeenCalled();
+    expect(interaction.reply).toHaveBeenCalledWith(
       expect.objectContaining({
         content:
           "設定を変更するには、変更対象（チャンネル、ユーザー、またはロール）を指定してください。",
@@ -130,9 +134,30 @@ describe("Settings Command Handler", () => {
 
     await handleSettingCommand(interaction, {} as Client);
 
-    expect(interaction.followUp).toHaveBeenCalledWith(
+    expect(interaction.deferReply).not.toHaveBeenCalled();
+    expect(interaction.reply).toHaveBeenCalledWith(
       expect.objectContaining({
         content: "設定を変更するには、type と action の両方を指定してください。",
+        ephemeral: true,
+      }),
+    );
+  });
+
+  it("should catch errors during settingsManager.load and send fallback error message", async () => {
+    const interaction = createMockInteraction({
+      type: "blacklist",
+      action: "add",
+      channel: { id: "chan_123", name: "general" },
+    });
+
+    vi.spyOn(settingsManager, "load").mockRejectedValue(new Error("Disk read error"));
+
+    await handleSettingCommand(interaction, {} as Client);
+
+    expect(interaction.deferReply).toHaveBeenCalled();
+    expect(interaction.followUp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: "設定の保存中にエラーが発生しました。",
         ephemeral: true,
       }),
     );
