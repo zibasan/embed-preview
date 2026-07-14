@@ -282,7 +282,7 @@ describe("Settings Command Handler", () => {
       }),
     );
 
-    const updateCall = update.mock.calls[0][0];
-    expect(updateCall.components).toHaveLength(1); // Only Container, no ActionRow with SelectMenu
+    const updateCall = update.mock.calls[0]?.[0];
+    expect(updateCall?.components).toHaveLength(1); // Only Container, no ActionRow with SelectMenu
   });
 });
