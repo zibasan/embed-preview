@@ -23,7 +23,7 @@ export function registerMessageCreateEvent(client: Client): void {
       } catch (err) {
         console.error("[messageCreate] Failed to load settings:", err);
       }
-      const roleIds = message.member?.roles.cache.map((r) => r.id) || [];
+      const roleIds = message.member?.roles?.cache?.map((r) => r.id) || [];
       if (
         !settingsManager.isAllowed(message.guildId, message.channelId, message.author.id, roleIds)
       ) {
