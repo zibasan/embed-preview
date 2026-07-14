@@ -72,7 +72,7 @@ export async function handleSettingCommand(
   // 1. もし引数が「すべて空」なら、対話的UIを返す
   if (!hasType && !hasAction && !hasTarget) {
     try {
-      await interaction.deferReply();
+      await interaction.deferReply({ flags: [MessageFlags.IsComponentsV2] });
       await settingsManager.load();
       const settings = settingsManager.getSettings(guildId);
       const components = buildSettingsComponents(interaction.client, interaction.guild, settings);

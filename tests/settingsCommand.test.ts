@@ -227,7 +227,9 @@ describe("Settings Command Handler", () => {
 
     await handleSettingCommand(interaction, mockClient);
 
-    expect(interaction.deferReply).toHaveBeenCalled();
+    expect(interaction.deferReply).toHaveBeenCalledWith({
+      flags: expect.arrayContaining([32768]),
+    });
     expect(interaction.followUp).toHaveBeenCalledWith(
       expect.objectContaining({
         components: expect.any(Array),
