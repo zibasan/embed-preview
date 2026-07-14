@@ -1,5 +1,16 @@
-import { type ChatInputCommandInteraction, type Client, SlashCommandBuilder } from "discord.js";
-import { settingsManager } from "../utils/settingsManager.ts";
+import {
+  type ChatInputCommandInteraction,
+  type Client,
+  SlashCommandBuilder,
+  ContainerBuilder,
+  TextDisplayBuilder,
+  SeparatorBuilder,
+  StringSelectMenuBuilder,
+  ActionRowBuilder,
+  MessageFlags,
+  type StringSelectMenuInteraction,
+} from "discord.js";
+import { settingsManager, type GuildSettings } from "../utils/settingsManager.ts";
 
 export const settingCommand = new SlashCommandBuilder()
   .setName("settings")
@@ -58,12 +69,27 @@ export async function handleSettingCommand(
   const hasAction = action !== null;
   const hasTarget = channel !== null || user !== null || role !== null;
 
-  // 1. もし引数が「すべて空」なら、対話的UIを返す（Task 2 ではプレースホルダー）
+  // 1. もし引数が「すべて空」なら、対話的UIを返す
   if (!hasType && !hasAction && !hasTarget) {
     try {
-      await interaction.reply({ content: "対話的設定UIは未実装です" });
+      await interaction.deferReply();
+      await settingsManager.load();
+      const settings = settingsManager.getSettings(guildId);
+      const components = buildSettingsComponents(interaction.client, interaction.guild, settings);
+      await interaction.followUp({
+        components,
+        flags: [MessageFlags.IsComponentsV2],
+      });
     } catch (err) {
-      console.error("[settings] Failed to send placeholder response:", err);
+      console.error("[settings] Failed to send interactive settings UI:", err);
+      try {
+        await interaction.followUp({
+          content: "設定画面の表示中にエラーが発生しました。",
+          ephemeral: true,
+        });
+      } catch (followUpErr) {
+        console.error("[settings] Failed to send fallback error response:", followUpErr);
+      }
     }
     return;
   }
@@ -95,7 +121,6 @@ export async function handleSettingCommand(
     return;
   }
 
-  // validation checks passed, now call deferReply
   try {
     await interaction.deferReply();
   } catch (err) {
@@ -168,7 +193,7 @@ export async function handleSettingCommand(
     const finalMessage = responseParts.join("\n");
     await interaction.followUp({ content: finalMessage });
   } catch (err) {
-    console.error("[settings] Error in setting command execution:", err);
+    console.error("[settings] Error processing settings command:", err);
     try {
       await interaction.followUp({
         content: "設定の保存中にエラーが発生しました。",
@@ -176,6 +201,175 @@ export async function handleSettingCommand(
       });
     } catch (followUpErr) {
       console.error("[settings] Failed to send fallback error response:", followUpErr);
+    }
+  }
+}
+
+function getChannelLabel(guild: any, id: string): string {
+  const channel = guild?.channels.cache.get(id);
+  return channel ? `#${channel.name}` : `ID: ${id}`;
+}
+
+function getUserLabel(client: Client, guild: any, id: string): string {
+  const member = guild?.members.cache.get(id);
+  if (member) return member.user.tag;
+  const user = client.users.cache.get(id);
+  if (user) return user.tag;
+  return `ID: ${id}`;
+}
+
+function getRoleLabel(guild: any, id: string): string {
+  const role = guild?.roles.cache.get(id);
+  return role ? `@${role.name}` : `ID: ${id}`;
+}
+
+export function buildSettingsComponents(
+  client: Client,
+  guild: any,
+  settings: GuildSettings,
+): any[] {
+  const { blacklist, whitelist } = settings;
+
+  const blacklistText = new TextDisplayBuilder().setContent(
+    `**ブラックリスト (Blacklist)**\n` +
+      `• チャンネル: ${blacklist.channels.length > 0 ? blacklist.channels.map((id) => `<#${id}>`).join(", ") : "なし"}\n` +
+      `• ユーザー: ${blacklist.users.length > 0 ? blacklist.users.map((id) => `<@${id}>`).join(", ") : "なし"}\n` +
+      `• ロール: ${blacklist.roles.length > 0 ? blacklist.roles.map((id) => `<@&${id}>`).join(", ") : "なし"}`,
+  );
+
+  const whitelistText = new TextDisplayBuilder().setContent(
+    `**ホワイトリスト (Whitelist)**\n` +
+      `• チャンネル: ${whitelist.channels.length > 0 ? whitelist.channels.map((id) => `<#${id}>`).join(", ") : "なし"}\n` +
+      `• ユーザー: ${whitelist.users.length > 0 ? whitelist.users.map((id) => `<@${id}>`).join(", ") : "なし"}\n` +
+      `• ロール: ${whitelist.roles.length > 0 ? whitelist.roles.map((id) => `<@&${id}>`).join(", ") : "なし"}`,
+  );
+
+  const container = new ContainerBuilder()
+    .setAccentColor(0x5865f2) // Blurple
+    .addTextDisplayComponents(blacklistText)
+    .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
+    .addTextDisplayComponents(whitelistText);
+
+  const options: { label: string; value: string }[] = [];
+
+  blacklist.channels.forEach((id) => {
+    options.push({
+      label: `Blacklist - Channel: ${getChannelLabel(guild, id)}`,
+      value: `blacklist:channels:${id}`,
+    });
+  });
+  blacklist.users.forEach((id) => {
+    options.push({
+      label: `Blacklist - User: ${getUserLabel(client, guild, id)}`,
+      value: `blacklist:users:${id}`,
+    });
+  });
+  blacklist.roles.forEach((id) => {
+    options.push({
+      label: `Blacklist - Role: ${getRoleLabel(guild, id)}`,
+      value: `blacklist:roles:${id}`,
+    });
+  });
+
+  whitelist.channels.forEach((id) => {
+    options.push({
+      label: `Whitelist - Channel: ${getChannelLabel(guild, id)}`,
+      value: `whitelist:channels:${id}`,
+    });
+  });
+  whitelist.users.forEach((id) => {
+    options.push({
+      label: `Whitelist - User: ${getUserLabel(client, guild, id)}`,
+      value: `whitelist:users:${id}`,
+    });
+  });
+  whitelist.roles.forEach((id) => {
+    options.push({
+      label: `Whitelist - Role: ${getRoleLabel(guild, id)}`,
+      value: `whitelist:roles:${id}`,
+    });
+  });
+
+  const components: any[] = [container];
+
+  if (options.length > 0) {
+    const selectMenu = new StringSelectMenuBuilder()
+      .setCustomId("settings_remove")
+      .setPlaceholder("削除する項目を選択してください")
+      .addOptions(options.slice(0, 25));
+
+    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
+    components.push(row);
+  }
+
+  return components;
+}
+
+export async function handleSettingsRemoveInteraction(
+  interaction: StringSelectMenuInteraction,
+  _client: Client,
+): Promise<void> {
+  const guildId = interaction.guildId;
+  if (!guildId) {
+    try {
+      await interaction.reply({
+        content: "この操作はサーバー内でのみ実行できます。",
+        ephemeral: true,
+      });
+    } catch (err) {
+      console.error("[settings_remove] Failed to send guild-only error response:", err);
+    }
+    return;
+  }
+
+  const selectedValue = interaction.values[0];
+  if (!selectedValue) {
+    try {
+      await interaction.reply({
+        content: "削除対象が選択されていません。",
+        ephemeral: true,
+      });
+    } catch (err) {
+      console.error("[settings_remove] Failed to send error response:", err);
+    }
+    return;
+  }
+
+  try {
+    const [type, listType, id] = selectedValue.split(":");
+    if (
+      (type !== "whitelist" && type !== "blacklist") ||
+      (listType !== "channels" && listType !== "users" && listType !== "roles") ||
+      !id
+    ) {
+      throw new Error(`Invalid selected value format: ${selectedValue}`);
+    }
+
+    await settingsManager.load();
+    const settings = settingsManager.getSettings(guildId);
+
+    const list = settings[type];
+    if (list && list[listType]) {
+      list[listType] = list[listType].filter((existingId) => existingId !== id);
+    }
+
+    await settingsManager.setSettings(guildId, settings);
+
+    const components = buildSettingsComponents(interaction.client, interaction.guild, settings);
+
+    await interaction.update({
+      components,
+      flags: [MessageFlags.IsComponentsV2],
+    });
+  } catch (err) {
+    console.error("[settings_remove] Error processing setting removal:", err);
+    try {
+      await interaction.reply({
+        content: "項目の削除中にエラーが発生しました。",
+        ephemeral: true,
+      });
+    } catch (replyErr) {
+      console.error("[settings_remove] Failed to send fallback error response:", replyErr);
     }
   }
 }

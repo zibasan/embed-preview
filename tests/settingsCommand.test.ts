@@ -87,23 +87,6 @@ describe("Settings Command Handler", () => {
     );
   });
 
-  it("should show interactive UI placeholder when all options are empty", async () => {
-    const interaction = createMockInteraction({
-      type: null,
-      action: null,
-      channel: null,
-      user: null,
-      role: null,
-    });
-
-    await handleSettingCommand(interaction, {} as Client);
-
-    expect(interaction.deferReply).not.toHaveBeenCalled();
-    expect(interaction.reply).toHaveBeenCalledWith({
-      content: "対話的設定UIは未実装です",
-    });
-  });
-
   it("should fail when type/action specified but no target specified", async () => {
     const interaction = createMockInteraction({
       type: "blacklist",
@@ -222,5 +205,82 @@ describe("Settings Command Handler", () => {
     const settings = settingsManager.getSettings("guild_123");
     expect(settings.whitelist.users).toContain("user_555");
     expect(settings.whitelist.roles).toContain("role_777");
+  });
+
+  it("should show interactive UI with Container and select menu when all options are empty", async () => {
+    await settingsManager.load();
+    const initSettings = settingsManager.getSettings("guild_123");
+    initSettings.blacklist.channels.push("chan_abc");
+    await settingsManager.setSettings("guild_123", initSettings);
+
+    const interaction = createMockInteraction({
+      type: null,
+      action: null,
+      channel: null,
+      user: null,
+      role: null,
+    });
+
+    const mockClient = {
+      users: { cache: new Map() },
+    } as any;
+
+    await handleSettingCommand(interaction, mockClient);
+
+    expect(interaction.deferReply).toHaveBeenCalled();
+    expect(interaction.followUp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        components: expect.any(Array),
+        flags: expect.arrayContaining([32768]), // MessageFlags.IsComponentsV2
+      }),
+    );
+
+    const followUpCall = (interaction.followUp as any).mock.calls[0][0];
+    const components = followUpCall.components;
+    expect(components).toHaveLength(2); // Container and SelectMenu
+    expect(components[0].data.type).toBe(17); // ComponentType.Container
+    expect(components[1].components[0].data.custom_id).toBe("settings_remove");
+  });
+
+  it("should handle settings_remove interaction, remove item and update message", async () => {
+    await settingsManager.load();
+    const initSettings = settingsManager.getSettings("guild_123");
+    initSettings.blacklist.channels.push("chan_to_remove");
+    await settingsManager.setSettings("guild_123", initSettings);
+
+    const update = vi.fn().mockResolvedValue(undefined);
+    const mockClient = {
+      users: { cache: new Map() },
+    } as any;
+
+    const mockSelectMenuInteraction = {
+      guildId: "guild_123",
+      values: ["blacklist:channels:chan_to_remove"],
+      update,
+      isStringSelectMenu: () => true,
+      customId: "settings_remove",
+      guild: {
+        channels: { cache: new Map() },
+        members: { cache: new Map() },
+        roles: { cache: new Map() },
+      },
+      client: mockClient,
+    } as any;
+
+    const { handleSettingsRemoveInteraction } = await import("../src/commands/settings.ts");
+    await handleSettingsRemoveInteraction(mockSelectMenuInteraction, mockClient);
+
+    const settings = settingsManager.getSettings("guild_123");
+    expect(settings.blacklist.channels).not.toContain("chan_to_remove");
+
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        components: expect.any(Array),
+        flags: expect.arrayContaining([32768]),
+      }),
+    );
+
+    const updateCall = update.mock.calls[0][0];
+    expect(updateCall.components).toHaveLength(1); // Only Container, no ActionRow with SelectMenu
   });
 });

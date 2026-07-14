@@ -2,7 +2,7 @@ import { type ChatInputCommandInteraction, Client, Events, GatewayIntentBits } f
 import { config } from "dotenv";
 import { registerMessageCreateEvent } from "./events/messageCreate.ts";
 import { handlePreviewCommand, registerSlashCommands } from "./commands/preview.ts";
-import { handleSettingCommand } from "./commands/settings.ts";
+import { handleSettingCommand, handleSettingsRemoveInteraction } from "./commands/settings.ts";
 import { isOpenOriginalButton } from "./utils/buttons.ts";
 
 config();
@@ -42,6 +42,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (interaction.isChatInputCommand() && interaction.commandName === "settings") {
       await handleSettingCommand(interaction as ChatInputCommandInteraction, client);
+      return;
+    }
+
+    if (interaction.isStringSelectMenu() && interaction.customId === "settings_remove") {
+      await handleSettingsRemoveInteraction(interaction, client);
       return;
     }
 
