@@ -12,6 +12,7 @@ Thanks for your interest in improving embed-preview! This document explains how 
 
 - Check open issues and pull requests to avoid duplicate work.
 - For anything beyond a small fix (new commands, behavior changes, dependency additions), open an issue first to discuss the approach before investing time in an implementation.
+- Keep contributions focused. Small, reviewable pull requests move faster than broad refactors.
 
 ## Development setup
 
@@ -39,6 +40,8 @@ Use `<type>/<kebab-case-description>`, matching this repository's history:
 - `docs/` — documentation-only changes
 - `ref/` — refactors
 - `npm/` — dependency updates
+
+Avoid unrelated renames or directory reshuffles in the same pull request.
 
 ### Commit messages
 
