@@ -3,15 +3,12 @@ import { config } from "dotenv";
 import { registerMessageCreateEvent } from "./events/messageCreate.ts";
 import { handlePreviewCommand, registerSlashCommands } from "./commands/preview.ts";
 import { handleSettingCommand, handleSettingsRemoveInteraction } from "./commands/settings.ts";
-import { isOpenOriginalButton } from "./utils/buttons.ts";
+import { isOpenOriginalButton, resolveOriginalUrlFromButtonInteraction } from "./utils/buttons.ts";
+import { resolveDiscordToken } from "./utils/env.ts";
 
 config();
 
-const TOKEN = process.env["DISCORD_TOKEN"];
-if (!TOKEN) {
-  console.error("[index] DISCORD_TOKEN is not set in .env");
-  process.exit(1);
-}
+const TOKEN = resolveDiscordToken(process.env, process.exit);
 
 const client = new Client({
   intents: [
@@ -51,12 +48,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
     if (isOpenOriginalButton(interaction)) {
-      const row = interaction.message.components[0];
-      const urlComponent = row && "components" in row ? row.components[1] : undefined;
-      const originalUrl =
-        urlComponent && "url" in urlComponent && urlComponent.url != null
-          ? urlComponent.url
-          : "メッセージリンクが見つかりません";
+      const originalUrl = resolveOriginalUrlFromButtonInteraction(interaction);
       await interaction.reply({ content: originalUrl, ephemeral: true });
     }
   } catch (err) {
