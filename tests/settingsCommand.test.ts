@@ -73,19 +73,22 @@ describe("Settings Command Backend Handler", () => {
     );
   });
 
-  it("should handle settings:toggle_mode interaction and save to settings.json", async () => {
+  it("should handle settings_modal:black_white submit interaction and save to settings.json", async () => {
     await settingsManager.load();
     const initSettings = settingsManager.getSettings("guild_123");
     expect(initSettings.mode).toBe("blacklist");
 
     const update = vi.fn().mockResolvedValue(undefined);
-    const mockToggleInteraction = {
+    const mockModalSubmitInteraction = {
       guildId: "guild_123",
-      customId: "settings:toggle_mode",
+      customId: "settings_modal:black_white",
+      fields: {
+        getTextInputValue: vi.fn().mockReturnValue("whitelist"),
+      },
       update,
     } as any;
 
-    await handleSettingsInteraction(mockToggleInteraction, {} as Client);
+    await handleSettingsInteraction(mockModalSubmitInteraction, {} as Client);
 
     const settings = settingsManager.getSettings("guild_123");
     expect(settings.mode).toBe("whitelist");

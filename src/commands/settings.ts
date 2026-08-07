@@ -12,8 +12,22 @@ import {
   ButtonStyle,
   ThumbnailBuilder,
   ActionRowBuilder,
+  ModalBuilder,
+  LabelBuilder,
+  CheckboxBuilder,
+  CheckboxGroupBuilder,
+  CheckboxGroupOptionBuilder,
+  ModalSubmitInteraction,
+  ModalSubmitFields,
 } from "discord.js";
 import { settingsManager, type GuildSettings } from "../utils/settingsManager.ts";
+
+const toggleButtonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  new ButtonBuilder()
+    .setCustomId("settings:toggle_mode")
+    .setLabel("Switch mode")
+    .setStyle(ButtonStyle.Primary),
+);
 
 export const settingCommand = new SlashCommandBuilder()
   .setName("settings")
@@ -58,15 +72,12 @@ export function buildMainSettingsComponents(guild: any): any[] {
         ),
     )
     .addSeparatorComponents(
-      new SeparatorBuilder()
-        .setDivider(true)
-        .setSpacing(SeparatorSpacingSize.Small)
+      new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
     )
     .addTextDisplayComponents(
-      new TextDisplayBuilder()
-        .setContent(
-          `-# You can close this settings screen at any time by pressing "Dismiss Message" below.`
-        )
+      new TextDisplayBuilder().setContent(
+        `-# You can close this settings screen at any time by pressing "Dismiss Message" below.`,
+      ),
     );
 
   return [container];
@@ -140,9 +151,25 @@ export async function handleSettingsInteraction(interaction: any, _client: Clien
       return;
     }
 
-    if (typeof customId === "string" && customId === "settings:toggle_mode") {
-      settings.mode = settings.mode === "blacklist" ? "whitelist" : "blacklist";
-      await settingsManager.setSettings(guildId, settings);
+    if (typeof customId === "string" && customId === "settings_modal:black_white") {
+      // Switching Mode
+      if ((interaction as ModalSubmitInteraction).fields.getCheckboxGroup('confirm_checkbox')[0] === 'Yes') {
+        settings.mode = settings.mode === "blacklist" ? "whitelist" : "blacklist";
+        await settingsManager.setSettings(guildId, settings);
+        const components = buildSettingsComponents(_client, interaction.guild, settings);
+        await interaction.update({
+          components,
+          flags: [MessageFlags.IsComponentsV2],
+        });
+        return;
+      }
+    } else if (
+      typeof customId === "string" &&
+      (customId === "settings:toggle_mode" || customId === "settings:open_mode_modal")
+    ) {
+      const modal = buildModeModal(settings.mode);
+      await interaction.showModal(modal);
+      return;
     } else if (typeof customId === "string" && customId.startsWith("settings:set_mode:")) {
       const mode = customId.split(":")[2] as "blacklist" | "whitelist";
 
@@ -229,8 +256,10 @@ export function buildSettingsComponents(
 
   const modeText = mode === "blacklist" ? "**🚫 Blacklist**" : "**✅ Whitelist**";
 
-  container.addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(`Current Mode: ${modeText}`),
+  container.addSectionComponents(
+    new SectionBuilder()
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent(`Current Mode: ${modeText}`))
+      .setButtonAccessory(toggleButtonRow.components[0] as ButtonBuilder),
   );
 
   container.addSeparatorComponents(
@@ -255,14 +284,39 @@ export function buildSettingsComponents(
 
   const components: any[] = [container];
 
-  const toggleButtonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId("settings:toggle_mode")
-      .setLabel(mode === "blacklist" ? "Switch to Whitelist Mode" : "Switch to Blacklist Mode")
-      .setStyle(ButtonStyle.Primary),
-  );
-
-  components.push(toggleButtonRow);
-
   return components;
+}
+
+/**
+ * Builds the mode configuration modal (customId: "settings_modal:black_white").
+ * Frontend UI developers can construct and return the ModalBuilder here.
+ */
+export function buildModeModal(currentMode?: string): any {
+  const modal = new ModalBuilder()
+    .setTitle("Confirm")
+    .setCustomId("settings_modal:black_white")
+    .addLabelComponents(
+      new LabelBuilder()
+        .setLabel(currentMode === "blacklist" ? "Really switch to whitelist mode?" : "Really switch to blacklist mode?")
+        .setCheckboxGroupComponent(
+          new CheckboxGroupBuilder()
+            .setCustomId("confirm_checkbox")
+            .setMinValues(1)
+            .setMaxValues(1)
+            .setRequired(true)
+            .setOptions(
+              new CheckboxGroupOptionBuilder()
+                .setLabel(currentMode === "blacklist" ? "Yes, I will switch to whitelist mode." : "Yes, I will switch to blacklist mode.")
+                .setValue("Yes")
+            )
+        )
+    )
+    .addTextDisplayComponents(
+      new TextDisplayBuilder()
+        .setContent(
+          currentMode === "blacklist" ? "**When you switch to the whitelist, the bot will operate only for the users, roles, and channels registered on the whitelist.**" : "**When you switch to the blacklist mode, the bot will operate only for users, roles, and channels that are not on the blacklist.**"
+        )
+    );
+
+  return modal;
 }

@@ -1,13 +1,16 @@
 {
   "guilds": {
     "1335083226166857819": {
+      "mode": "blacklist",
       "blacklist": {
         "channels": [],
         "users": [],
         "roles": []
       },
       "whitelist": {
-        "channels": ["1380314611349458984"],
+        "channels": [
+          "1380314611349458984"
+        ],
         "users": [],
         "roles": []
       }
