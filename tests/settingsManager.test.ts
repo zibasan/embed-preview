@@ -37,6 +37,7 @@ describe("SettingsManager", () => {
       const initialData = {
         guilds: {
           "111222333": {
+            mode: "blacklist",
             blacklist: {
               channels: ["c1"],
               users: ["u1"],
@@ -55,6 +56,7 @@ describe("SettingsManager", () => {
 
       await manager.load();
       const settings = manager.getSettings("111222333");
+      expect(settings.mode).toBe("blacklist");
       expect(settings.blacklist.channels).toEqual(["c1"]);
       expect(settings.blacklist.users).toEqual(["u1"]);
       expect(settings.blacklist.roles).toEqual(["r1"]);
@@ -63,26 +65,30 @@ describe("SettingsManager", () => {
     it("should update settings, cache them, and save to file", async () => {
       await manager.load();
       const newSettings = createDefaultGuildSettings();
+      newSettings.mode = "whitelist";
       newSettings.whitelist.channels.push("c_white");
 
       await manager.setSettings("guild_abc", newSettings);
 
       // Verify cache
       const cached = manager.getSettings("guild_abc");
+      expect(cached.mode).toBe("whitelist");
       expect(cached.whitelist.channels).toEqual(["c_white"]);
 
       // Verify file
       const fileContent = await fs.promises.readFile(TEST_FILE, "utf-8");
       const parsed = JSON.parse(fileContent);
+      expect(parsed.guilds["guild_abc"].mode).toBe("whitelist");
       expect(parsed.guilds["guild_abc"].whitelist.channels).toEqual(["c_white"]);
     });
   });
 
   describe("isAllowed logic", () => {
-    describe("when whitelist is empty", () => {
+    describe("when mode is blacklist", () => {
       beforeEach(async () => {
         await manager.load();
         const settings = createDefaultGuildSettings();
+        settings.mode = "blacklist";
         settings.blacklist.channels.push("blocked_chan");
         settings.blacklist.users.push("blocked_user");
         settings.blacklist.roles.push("blocked_role");
@@ -113,37 +119,32 @@ describe("SettingsManager", () => {
       });
     });
 
-    describe("when whitelist is not empty", () => {
+    describe("when mode is whitelist", () => {
       beforeEach(async () => {
         await manager.load();
         const settings = createDefaultGuildSettings();
+        settings.mode = "whitelist";
         settings.whitelist.channels.push("ok_chan");
         settings.whitelist.users.push("ok_user");
         settings.whitelist.roles.push("ok_role");
-
-        // Also add blacklists to verify they are ignored when whitelist is active
-        settings.blacklist.channels.push("blocked_chan");
-        settings.blacklist.users.push("blocked_user");
-        settings.blacklist.roles.push("blocked_role");
 
         await manager.setSettings("g1", settings);
       });
 
       it("should allow if channel is whitelisted", () => {
-        // Even if user/role matches blacklist, whitelist should override/blacklist is ignored
-        const allowed = manager.isAllowed("g1", "ok_chan", "blocked_user", ["blocked_role"]);
+        const allowed = manager.isAllowed("g1", "ok_chan", "other_user", ["other_role"]);
         expect(allowed).toBe(true);
       });
 
       it("should allow if user is whitelisted", () => {
-        const allowed = manager.isAllowed("g1", "blocked_chan", "ok_user", ["blocked_role"]);
+        const allowed = manager.isAllowed("g1", "other_chan", "ok_user", ["other_role"]);
         expect(allowed).toBe(true);
       });
 
-      it("should allow if role is whitelisted - actual test", () => {
-        const allowed = manager.isAllowed("g1", "blocked_chan", "blocked_user", [
+      it("should allow if role is whitelisted", () => {
+        const allowed = manager.isAllowed("g1", "other_chan", "other_user", [
           "ok_role",
-          "blocked_role",
+          "other_role",
         ]);
         expect(allowed).toBe(true);
       });
