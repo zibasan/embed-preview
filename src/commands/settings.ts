@@ -10,12 +10,56 @@ import {
   SectionBuilder,
   ButtonBuilder,
   ButtonStyle,
+  ThumbnailBuilder,
+  ActionRowBuilder,
 } from "discord.js";
 import { settingsManager, type GuildSettings } from "../utils/settingsManager.ts";
 
 export const settingCommand = new SlashCommandBuilder()
   .setName("settings")
   .setDescription("Configure the bot settings");
+
+export function buildMainSettingsComponents(guild: any): any[] {
+  const container = new ContainerBuilder().setAccentColor(0x4169e1);
+  if (guild?.iconURL()) {
+    container.addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(
+            `## Embed Preview Bot Settings For "${guild?.name}"\n\nPlease select the item to configure.`,
+          ),
+        )
+        .setThumbnailAccessory(new ThumbnailBuilder().setURL(guild.iconURL() as string)),
+    );
+  } else {
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        `## Embed Preview Bot Settings For "${guild?.name}"\n\nPlease select the item to configure.`,
+      ),
+    );
+  }
+
+  container
+    .addSeparatorComponents(
+      new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large),
+    )
+    .addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(
+            "### Blacklist / Whitelist\n\nYou can configure blacklists or whitelists for users, roles, and channels.",
+          ),
+        )
+        .setButtonAccessory(
+          new ButtonBuilder()
+            .setEmoji("➡️")
+            .setCustomId("settings:black_white")
+            .setStyle(ButtonStyle.Primary),
+        ),
+    );
+
+  return [container];
+}
 
 export async function handleSettingCommand(
   interaction: ChatInputCommandInteraction,
@@ -35,47 +79,11 @@ export async function handleSettingCommand(
   }
 
   try {
-    const container = new ContainerBuilder().setAccentColor(0x4169e1);
-
-    container
-      .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          "## Embed Preview Bot Settings\n\nPlease select the item to configure.",
-        ),
-      )
-      .addSeparatorComponents(
-        new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large),
-      )
-      .addSectionComponents(
-        new SectionBuilder()
-          .addTextDisplayComponents(
-            new TextDisplayBuilder()
-              .setContent(
-                "### Blacklist / Whitelist\n\nYou can configure blacklists or whitelists for users, roles, and channels."
-              ),
-          )
-          .setButtonAccessory(
-            new ButtonBuilder()
-              .setEmoji("➡️")
-              .setCustomId("settings:black_white")
-              .setStyle(ButtonStyle.Primary)
-          ),
-      );
-
+    const components = buildMainSettingsComponents(interaction.guild);
     await interaction.reply({
-      components: [container],
-      flags: [MessageFlags.IsComponentsV2],
-    });
-
-    /*
-    await settingsManager.load();
-    const settings = settingsManager.getSettings(guildId);
-    const components = buildSettingsComponents(_client, interaction.guild, settings);
-    await interaction.followUp({
       components,
       flags: [MessageFlags.IsComponentsV2],
     });
-    */
   } catch (err) {
     console.error("[settings] Error processing settings command:", err);
     try {
@@ -90,7 +98,8 @@ export async function handleSettingCommand(
 }
 
 /**
- * Handles component interactions for adding/removing items to/from whitelist or blacklist.
+ * Handles component interactions for adding/removing items to/from whitelist or blacklist,
+ * and navigating between settings screens.
  */
 export async function handleSettingsInteraction(interaction: any, _client: Client): Promise<void> {
   const guildId = interaction.guildId;
@@ -111,11 +120,21 @@ export async function handleSettingsInteraction(interaction: any, _client: Clien
     const settings = settingsManager.getSettings(guildId);
     const customId = interaction.customId;
 
+    if (typeof customId === "string" && customId === "settings:main") {
+      const components = buildMainSettingsComponents(interaction.guild);
+      await interaction.update({
+        components,
+        flags: [MessageFlags.IsComponentsV2],
+      });
+      return;
+    }
+
     if (typeof customId === "string" && customId === "settings:toggle_mode") {
       settings.mode = settings.mode === "blacklist" ? "whitelist" : "blacklist";
       await settingsManager.setSettings(guildId, settings);
     } else if (typeof customId === "string" && customId.startsWith("settings:set_mode:")) {
       const mode = customId.split(":")[2] as "blacklist" | "whitelist";
+
       if (mode === "blacklist" || mode === "whitelist") {
         settings.mode = mode;
         await settingsManager.setSettings(guildId, settings);
@@ -186,9 +205,63 @@ export async function handleSettingsRemoveInteraction(
  * Frontend UI developers can modify or expand this function.
  */
 export function buildSettingsComponents(
-  _client: Client,
-  _guild: any,
-  _settings: GuildSettings,
+  client: Client,
+  guild: any,
+  settings: GuildSettings,
 ): any[] {
-  return [];
+  const { mode, blacklist, whitelist } = settings;
+
+  // 1. メインコンテナの作成
+  const container = new ContainerBuilder()
+    .setAccentColor(mode === "blacklist" ? 0xed4245 : 0x57f287); // 赤(ブラックリスト) / 緑(ホワイトリスト)
+
+  // タイトル表示
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent("## ⚙️ サーバー設定 (Server Configuration)")
+  );
+
+  // 現在のモード表示
+  const modeText = mode === "blacklist"
+    ? "現在のモード: **🚫 ブラックリスト (指定アイテムを除外)**"
+    : "現在のモード: **✅ ホワイトリスト (指定アイテムのみ許可)**";
+
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(modeText)
+  );
+
+  container.addSeparatorComponents(
+    new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true)
+  );
+
+  // リストの現在の設定状態
+  const blacklistSummary =
+    `**ブラックリスト (Blacklist)**\n` +
+    `• チャンネル: ${blacklist.channels.length > 0 ? blacklist.channels.map(id => `<#${id}>`).join(", ") : "なし"}\n` +
+    `• ユーザー: ${blacklist.users.length > 0 ? blacklist.users.map(id => `<@${id}>`).join(", ") : "なし"}\n` +
+    `• ロール: ${blacklist.roles.length > 0 ? blacklist.roles.map(id => `<@&${id}>`).join(", ") : "なし"}`;
+
+  const whitelistSummary =
+    `**ホワイトリスト (Whitelist)**\n` +
+    `• チャンネル: ${whitelist.channels.length > 0 ? whitelist.channels.map(id => `<#${id}>`).join(", ") : "なし"}\n` +
+    `• ユーザー: ${whitelist.users.length > 0 ? whitelist.users.map(id => `<@${id}>`).join(", ") : "なし"}\n` +
+    `• ロール: ${whitelist.roles.length > 0 ? whitelist.roles.map(id => `<@&${id}>`).join(", ") : "なし"}`;
+
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(`${blacklistSummary}\n\n${whitelistSummary}`)
+  );
+
+  // 2. コンポーネント配列の初期化
+  const components: any[] = [container];
+
+  // モード切替ボタン
+  const toggleButtonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId("settings:toggle_mode")
+      .setLabel(mode === "blacklist" ? "ホワイトリストモードに切り替える" : "ブラックリストモードに切り替える")
+      .setStyle(ButtonStyle.Primary)
+  );
+
+  components.push(toggleButtonRow);
+
+  return components;
 }
