@@ -55,8 +55,7 @@ describe("Settings Command Backend Handler", () => {
     expect(interaction.deferReply).not.toHaveBeenCalled();
     expect(interaction.reply).toHaveBeenCalledWith(
       expect.objectContaining({
-        content: "このコマンドはサーバー内でのみ実行できます。",
-        ephemeral: true,
+        content: "This command can only be used within a server.",
       }),
     );
   });

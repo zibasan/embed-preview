@@ -56,6 +56,17 @@ export function buildMainSettingsComponents(guild: any): any[] {
             .setCustomId("settings:black_white")
             .setStyle(ButtonStyle.Primary),
         ),
+    )
+    .addSeparatorComponents(
+      new SeparatorBuilder()
+        .setDivider(true)
+        .setSpacing(SeparatorSpacingSize.Small)
+    )
+    .addTextDisplayComponents(
+      new TextDisplayBuilder()
+        .setContent(
+          `-# You can close this settings screen at any time by pressing "Dismiss Message" below.`
+        )
     );
 
   return [container];
@@ -69,8 +80,8 @@ export async function handleSettingCommand(
   if (!guildId) {
     try {
       await interaction.reply({
-        content: "このコマンドはサーバー内でのみ実行できます。",
-        ephemeral: true,
+        content: "This command can only be used within a server.",
+        flags: [MessageFlags.Ephemeral],
       });
     } catch (err) {
       console.error("[settings] Failed to send guild-only error response:", err);
@@ -82,14 +93,14 @@ export async function handleSettingCommand(
     const components = buildMainSettingsComponents(interaction.guild);
     await interaction.reply({
       components,
-      flags: [MessageFlags.IsComponentsV2],
+      flags: [MessageFlags.IsComponentsV2, MessageFlags.Ephemeral],
     });
   } catch (err) {
     console.error("[settings] Error processing settings command:", err);
     try {
       await interaction.followUp({
-        content: "設定画面の表示中にエラーが発生しました。",
-        ephemeral: true,
+        content: "An error occurred while displaying the settings screen.",
+        flags: [MessageFlags.Ephemeral],
       });
     } catch (followUpErr) {
       console.error("[settings] Failed to send fallback error response:", followUpErr);
@@ -106,8 +117,8 @@ export async function handleSettingsInteraction(interaction: any, _client: Clien
   if (!guildId) {
     try {
       await interaction.reply({
-        content: "この操作はサーバー内でのみ実行できます。",
-        ephemeral: true,
+        content: "This operation can only be performed within a server.",
+        flags: [MessageFlags.Ephemeral],
       });
     } catch (err) {
       console.error("[settings_interaction] Failed to send guild-only error response:", err);
@@ -184,8 +195,8 @@ export async function handleSettingsInteraction(interaction: any, _client: Clien
     console.error("[settings_interaction] Error processing settings interaction:", err);
     try {
       await interaction.reply({
-        content: "設定の更新中にエラーが発生しました。",
-        ephemeral: true,
+        content: "An error occurred while updating the settings.",
+        flags: [MessageFlags.Ephemeral],
       });
     } catch (replyErr) {
       console.error("[settings_interaction] Failed to send fallback error response:", replyErr);
@@ -200,10 +211,7 @@ export async function handleSettingsRemoveInteraction(
   return handleSettingsInteraction(interaction, client);
 }
 
-/**
- * Builds the UI components for the settings command.
- * Frontend UI developers can modify or expand this function.
- */
+// Builds the UI components for the settings command
 export function buildSettingsComponents(
   client: Client,
   guild: any,
@@ -211,54 +219,47 @@ export function buildSettingsComponents(
 ): any[] {
   const { mode, blacklist, whitelist } = settings;
 
-  // 1. メインコンテナの作成
-  const container = new ContainerBuilder()
-    .setAccentColor(mode === "blacklist" ? 0xed4245 : 0x57f287); // 赤(ブラックリスト) / 緑(ホワイトリスト)
+  const container = new ContainerBuilder().setAccentColor(
+    mode === "blacklist" ? 0x000000 : 0xffffff,
+  ); // black | white
 
-  // タイトル表示
   container.addTextDisplayComponents(
-    new TextDisplayBuilder().setContent("## ⚙️ サーバー設定 (Server Configuration)")
+    new TextDisplayBuilder().setContent("## Blacklist / Whitelist Settings"),
   );
 
-  // 現在のモード表示
-  const modeText = mode === "blacklist"
-    ? "現在のモード: **🚫 ブラックリスト (指定アイテムを除外)**"
-    : "現在のモード: **✅ ホワイトリスト (指定アイテムのみ許可)**";
+  const modeText = mode === "blacklist" ? "**🚫 Blacklist**" : "**✅ Whitelist**";
 
   container.addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(modeText)
+    new TextDisplayBuilder().setContent(`Current Mode: ${modeText}`),
   );
 
   container.addSeparatorComponents(
-    new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true)
+    new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true),
   );
 
-  // リストの現在の設定状態
   const blacklistSummary =
-    `**ブラックリスト (Blacklist)**\n` +
-    `• チャンネル: ${blacklist.channels.length > 0 ? blacklist.channels.map(id => `<#${id}>`).join(", ") : "なし"}\n` +
-    `• ユーザー: ${blacklist.users.length > 0 ? blacklist.users.map(id => `<@${id}>`).join(", ") : "なし"}\n` +
-    `• ロール: ${blacklist.roles.length > 0 ? blacklist.roles.map(id => `<@&${id}>`).join(", ") : "なし"}`;
+    `**Blacklist**\n` +
+    `• Channels: ${blacklist.channels.length > 0 ? blacklist.channels.map((id) => `<#${id}>`).join(", ") : "None"}\n` +
+    `• Users: ${blacklist.users.length > 0 ? blacklist.users.map((id) => `<@${id}>`).join(", ") : "None"}\n` +
+    `• Roles: ${blacklist.roles.length > 0 ? blacklist.roles.map((id) => `<@&${id}>`).join(", ") : "None"}`;
 
   const whitelistSummary =
-    `**ホワイトリスト (Whitelist)**\n` +
-    `• チャンネル: ${whitelist.channels.length > 0 ? whitelist.channels.map(id => `<#${id}>`).join(", ") : "なし"}\n` +
-    `• ユーザー: ${whitelist.users.length > 0 ? whitelist.users.map(id => `<@${id}>`).join(", ") : "なし"}\n` +
-    `• ロール: ${whitelist.roles.length > 0 ? whitelist.roles.map(id => `<@&${id}>`).join(", ") : "なし"}`;
+    `**Whitelist**\n` +
+    `• Channels: ${whitelist.channels.length > 0 ? whitelist.channels.map((id) => `<#${id}>`).join(", ") : "None"}\n` +
+    `• Users: ${whitelist.users.length > 0 ? whitelist.users.map((id) => `<@${id}>`).join(", ") : "None"}\n` +
+    `• Roles: ${whitelist.roles.length > 0 ? whitelist.roles.map((id) => `<@&${id}>`).join(", ") : "None"}`;
 
   container.addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(`${blacklistSummary}\n\n${whitelistSummary}`)
+    new TextDisplayBuilder().setContent(`${blacklistSummary}\n\n${whitelistSummary}`),
   );
 
-  // 2. コンポーネント配列の初期化
   const components: any[] = [container];
 
-  // モード切替ボタン
   const toggleButtonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId("settings:toggle_mode")
-      .setLabel(mode === "blacklist" ? "ホワイトリストモードに切り替える" : "ブラックリストモードに切り替える")
-      .setStyle(ButtonStyle.Primary)
+      .setLabel(mode === "blacklist" ? "Switch to Whitelist Mode" : "Switch to Blacklist Mode")
+      .setStyle(ButtonStyle.Primary),
   );
 
   components.push(toggleButtonRow);
