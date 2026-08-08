@@ -23,6 +23,7 @@ import {
   ChannelSelectMenuBuilder,
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
+  PermissionFlagsBits,
 } from "discord.js";
 import { settingsManager, type GuildSettings } from "../utils/settingsManager.ts";
 
@@ -56,7 +57,13 @@ const backButtonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
 
 export const settingCommand = new SlashCommandBuilder()
   .setName("settings")
-  .setDescription("Configure the bot settings");
+  .setDescription("Configure the bot settings")
+  .setDefaultMemberPermissions(
+    PermissionFlagsBits.Administrator
+  )
+  .setDefaultMemberPermissions(
+    PermissionFlagsBits.ManageGuild
+  );
 
 export function buildMainSettingsComponents(guild: any): any[] {
   const container = new ContainerBuilder().setAccentColor(0x4169e1);
