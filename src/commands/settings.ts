@@ -270,6 +270,68 @@ export async function handleSettingsInteraction(interaction: any, _client: Clien
       return;
     }
 
+    if (typeof customId === "string" && customId === "settings:black_white") {
+      const components = buildSettingsComponents(_client, interaction.guild, settings);
+      await interaction.update({
+        components,
+        flags: [MessageFlags.IsComponentsV2],
+      });
+      return;
+    }
+
+    if (
+      typeof customId === "string" &&
+      (customId.startsWith("settings:back") || customId === "settings:action_back")
+    ) {
+      if (customId === "settings:back_to_black_white") {
+        const components = buildSettingsComponents(_client, interaction.guild, settings);
+        await interaction.update({
+          components,
+          flags: [MessageFlags.IsComponentsV2],
+        });
+        return;
+      }
+
+      if (customId === "settings:back_to_select_target_delete") {
+        const components = buildSelectTargetListComponents("delete");
+        await interaction.update({
+          components,
+          flags: [MessageFlags.IsComponentsV2],
+        });
+        return;
+      }
+
+      if (customId === "settings:back_to_select_target_add") {
+        const components = buildSelectTargetListComponents("add");
+        await interaction.update({
+          components,
+          flags: [MessageFlags.IsComponentsV2],
+        });
+        return;
+      }
+
+      if (customId.startsWith("settings:back_to_delete_list:")) {
+        const listType = customId.split(":")[2] as "whitelist" | "blacklist";
+        const components = await buildDeleteFallbackComponents(
+          listType,
+          settings,
+          interaction.guild,
+        );
+        await interaction.update({
+          components,
+          flags: [MessageFlags.IsComponentsV2],
+        });
+        return;
+      }
+
+      const components = buildMainSettingsComponents(interaction.guild);
+      await interaction.update({
+        components,
+        flags: [MessageFlags.IsComponentsV2],
+      });
+      return;
+    }
+
     if (typeof customId === "string" && customId === "settings_modal:black_white") {
       if (isConfirmed(interaction.fields, "confirm_checkbox")) {
         settings.mode = settings.mode === "blacklist" ? "whitelist" : "blacklist";
@@ -315,7 +377,6 @@ export async function handleSettingsInteraction(interaction: any, _client: Clien
       const listType = parts[3] as "whitelist" | "blacklist";
 
       if (action === "add") {
-        // 追加用 Modal を表示
         const modal = buildAddModal(listType);
         await interaction.showModal(modal);
         return;
@@ -339,7 +400,6 @@ export async function handleSettingsInteraction(interaction: any, _client: Clien
           return;
         }
 
-        // メイン処理: 番号一覧画面を表示
         const components = await buildDeleteFallbackComponents(
           listType,
           settings,
@@ -353,7 +413,6 @@ export async function handleSettingsInteraction(interaction: any, _client: Clien
       }
     }
 
-    // 3. 追加 Modal Submit
     if (typeof customId === "string" && customId.startsWith("settings_modal:add:")) {
       const listType = customId.split(":")[2] as "whitelist" | "blacklist";
       if (listType && settings[listType] && interaction.fields) {
@@ -386,7 +445,6 @@ export async function handleSettingsInteraction(interaction: any, _client: Clien
       return;
     }
 
-    // 4. 削除 Modal Submit
     if (typeof customId === "string" && customId.startsWith("settings_modal:delete:")) {
       const listType = customId.split(":")[2] as "whitelist" | "blacklist";
       if (listType && settings[listType] && interaction.fields) {
@@ -424,7 +482,6 @@ export async function handleSettingsInteraction(interaction: any, _client: Clien
       return;
     }
 
-    // 5. フォールバック時の番号指定削除ボタン押下
     if (typeof customId === "string" && customId.startsWith("settings:prompt_delete_index:")) {
       const listType = customId.split(":")[2] as "whitelist" | "blacklist";
       const modal = buildDeleteByIndexModal(listType);
@@ -432,7 +489,6 @@ export async function handleSettingsInteraction(interaction: any, _client: Clien
       return;
     }
 
-    // 6. 番号指定削除 Modal Submit (確認画面へ遷移)
     if (typeof customId === "string" && customId.startsWith("settings_modal:delete_by_index:")) {
       const listType = customId.split(":")[2] as "whitelist" | "blacklist";
       if (listType && settings[listType] && interaction.fields) {
@@ -468,7 +524,6 @@ export async function handleSettingsInteraction(interaction: any, _client: Clien
       return;
     }
 
-    // 7. 削除確認画面の Yes ボタン押下 (実際の削除実行)
     if (typeof customId === "string" && customId.startsWith("settings:confirm_delete_yes:")) {
       const parts = customId.split(":");
       const listType = parts[2] as "whitelist" | "blacklist";
@@ -508,7 +563,6 @@ export async function handleSettingsInteraction(interaction: any, _client: Clien
       return;
     }
 
-    // 8. 削除確認画面の Cancel ボタン押下 (入力値を復元してモーダルを再表示)
     if (typeof customId === "string" && customId.startsWith("settings:confirm_delete_cancel:")) {
       const parts = customId.split(":");
       const listType = parts[2] as "whitelist" | "blacklist";
@@ -519,7 +573,6 @@ export async function handleSettingsInteraction(interaction: any, _client: Clien
       return;
     }
 
-    // 既存の direct settings:add / settings_remove 互換処理
     if (typeof customId === "string" && customId.startsWith("settings:add:")) {
       const parts = customId.split(":");
       const type = parts[2] as "whitelist" | "blacklist";
@@ -663,8 +716,16 @@ export function buildSelectTargetListComponents(action: "add" | "delete"): any[]
       .setStyle(ButtonStyle.Primary),
   );
 
+  const selectTargetBackButtonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId("settings:back_to_black_white")
+      .setEmoji("⬅️")
+      .setLabel("Back")
+      .setStyle(ButtonStyle.Secondary),
+  );
+
   container.addActionRowComponents(listButtonsRow);
-  container.addActionRowComponents(backButtonRow);
+  container.addActionRowComponents(selectTargetBackButtonRow);
 
   return [container];
 }
@@ -937,15 +998,18 @@ export async function buildDeleteFallbackComponents(
 
   container.addTextDisplayComponents(new TextDisplayBuilder().setContent(textList));
 
-  const promptButtonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  const navButtonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId("settings:back_to_select_target_delete")
+      .setLabel("Back")
+      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(`settings:prompt_delete_index:${listType}`)
-      .setLabel("Select the items to delete")
+      .setLabel("Delete by Item Numbers")
       .setStyle(ButtonStyle.Danger),
   );
 
-  container.addActionRowComponents(backButtonRow);
-  container.addActionRowComponents(promptButtonRow);
+  container.addActionRowComponents(navButtonRow);
 
   return [container];
 }
@@ -1048,6 +1112,11 @@ export async function buildDeleteConfirmComponents(
   container.addTextDisplayComponents(new TextDisplayBuilder().setContent(text));
 
   const buttonsRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`settings:back_to_delete_list:${listType}`)
+      .setLabel("Back")
+      .setEmoji("⬅️")
+      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(`settings:confirm_delete_yes:${listType}:${indicesStr}`)
       .setLabel("Yes")

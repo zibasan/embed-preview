@@ -219,6 +219,62 @@ describe("設定コマンド バックエンドハンドラー", () => {
     expect(updatedSettings.blacklist.channels).not.toContain("channel_target_1");
   });
 
+  it("各画面のBackボタンが1つ前の画面に戻るインタラクションを正しく処理する", async () => {
+    const update = vi.fn().mockResolvedValue(undefined);
+
+    // 登録アイテム番号一覧画面の Back -> Target List 選択画面
+    const mockBackFromDeleteList = {
+      guildId: "guild_123",
+      customId: "settings:back_to_select_target_delete",
+      update,
+    } as any;
+    await handleSettingsInteraction(mockBackFromDeleteList, {} as Client);
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        components: expect.any(Array),
+      }),
+    );
+
+    // 削除確認画面の Back -> 登録アイテム番号一覧画面
+    const mockBackFromConfirm = {
+      guildId: "guild_123",
+      customId: "settings:back_to_delete_list:blacklist",
+      update,
+    } as any;
+    await handleSettingsInteraction(mockBackFromConfirm, {} as Client);
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        components: expect.any(Array),
+      }),
+    );
+
+    // Add/Delete Items 画面の Back -> Black/whitelist 設定画面
+    const mockBackFromSelectTarget = {
+      guildId: "guild_123",
+      customId: "settings:back_to_black_white",
+      update,
+    } as any;
+    await handleSettingsInteraction(mockBackFromSelectTarget, {} as Client);
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        components: expect.any(Array),
+      }),
+    );
+
+    // Black/whitelist 設定画面の Back (settings:main) -> メイン案内画面
+    const mockBackToMain = {
+      guildId: "guild_123",
+      customId: "settings:main",
+      update,
+    } as any;
+    await handleSettingsInteraction(mockBackToMain, {} as Client);
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        components: expect.any(Array),
+      }),
+    );
+  });
+
   it("settings_removeインタラクションで項目が削除されsettings.jsonから除去される", async () => {
     await settingsManager.load();
     const initSettings = settingsManager.getSettings("guild_123");
