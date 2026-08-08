@@ -1,5 +1,4 @@
 import {
-  ButtonInteraction,
   type ChatInputCommandInteraction,
   Client,
   Events,
