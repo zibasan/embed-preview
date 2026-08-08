@@ -14,11 +14,8 @@ import {
   ActionRowBuilder,
   ModalBuilder,
   LabelBuilder,
-  CheckboxBuilder,
   CheckboxGroupBuilder,
   CheckboxGroupOptionBuilder,
-  ModalSubmitInteraction,
-  ModalSubmitFields,
 } from "discord.js";
 import { settingsManager, type GuildSettings } from "../utils/settingsManager.ts";
 
@@ -27,6 +24,14 @@ const toggleButtonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
     .setCustomId("settings:toggle_mode")
     .setLabel("Switch mode")
     .setStyle(ButtonStyle.Primary),
+);
+
+const backButtonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  new ButtonBuilder()
+    .setCustomId('settings:main')
+    .setEmoji("⬅️")
+    .setLabel("Back")
+    .setStyle(ButtonStyle.Secondary),
 );
 
 export const settingCommand = new SlashCommandBuilder()
@@ -152,17 +157,15 @@ export async function handleSettingsInteraction(interaction: any, _client: Clien
     }
 
     if (typeof customId === "string" && customId === "settings_modal:black_white") {
-      // Switching Mode
-      if ((interaction as ModalSubmitInteraction).fields.getCheckboxGroup('confirm_checkbox')[0] === 'Yes') {
-        settings.mode = settings.mode === "blacklist" ? "whitelist" : "blacklist";
-        await settingsManager.setSettings(guildId, settings);
-        const components = buildSettingsComponents(_client, interaction.guild, settings);
-        await interaction.update({
-          components,
-          flags: [MessageFlags.IsComponentsV2],
-        });
-        return;
-      }
+      settings.mode = settings.mode === "blacklist" ? "whitelist" : "blacklist";
+      await settingsManager.setSettings(guildId, settings);
+
+      const components = buildSettingsComponents(_client, interaction.guild, settings);
+      await interaction.update({
+        components,
+        flags: [MessageFlags.IsComponentsV2],
+      });
+      return;
     } else if (
       typeof customId === "string" &&
       (customId === "settings:toggle_mode" || customId === "settings:open_mode_modal")
@@ -282,6 +285,8 @@ export function buildSettingsComponents(
     new TextDisplayBuilder().setContent(`${blacklistSummary}\n\n${whitelistSummary}`),
   );
 
+  container.addActionRowComponents(backButtonRow);
+
   const components: any[] = [container];
 
   return components;
@@ -297,7 +302,11 @@ export function buildModeModal(currentMode?: string): any {
     .setCustomId("settings_modal:black_white")
     .addLabelComponents(
       new LabelBuilder()
-        .setLabel(currentMode === "blacklist" ? "Really switch to whitelist mode?" : "Really switch to blacklist mode?")
+        .setLabel(
+          currentMode === "blacklist"
+            ? "Really switch to whitelist mode?"
+            : "Really switch to blacklist mode?",
+        )
         .setCheckboxGroupComponent(
           new CheckboxGroupBuilder()
             .setCustomId("confirm_checkbox")
@@ -306,16 +315,21 @@ export function buildModeModal(currentMode?: string): any {
             .setRequired(true)
             .setOptions(
               new CheckboxGroupOptionBuilder()
-                .setLabel(currentMode === "blacklist" ? "Yes, I will switch to whitelist mode." : "Yes, I will switch to blacklist mode.")
-                .setValue("Yes")
-            )
-        )
+                .setLabel(
+                  currentMode === "blacklist"
+                    ? "Yes, I will switch to whitelist mode."
+                    : "Yes, I will switch to blacklist mode.",
+                )
+                .setValue("Yes"),
+            ),
+        ),
     )
     .addTextDisplayComponents(
-      new TextDisplayBuilder()
-        .setContent(
-          currentMode === "blacklist" ? "**When you switch to the whitelist, the bot will operate only for the users, roles, and channels registered on the whitelist.**" : "**When you switch to the blacklist mode, the bot will operate only for users, roles, and channels that are not on the blacklist.**"
-        )
+      new TextDisplayBuilder().setContent(
+        currentMode === "blacklist"
+          ? "**When you switch to the whitelist, the bot will operate only for the users, roles, and channels registered on the whitelist.**"
+          : "**When you switch to the blacklist mode, the bot will operate only for users, roles, and channels that are not on the blacklist.**",
+      ),
     );
 
   return modal;

@@ -27,7 +27,7 @@ function createMockInteraction(guildId: string | null = "guild_123") {
   } as unknown as ChatInputCommandInteraction;
 }
 
-describe("Settings Command Backend Handler", () => {
+describe("設定コマンド バックエンドハンドラー", () => {
   beforeEach(async () => {
     (settingsManager as any).filepath = TEST_FILE;
     (settingsManager as any).cache = { guilds: {} };
@@ -47,7 +47,7 @@ describe("Settings Command Backend Handler", () => {
     }
   });
 
-  it("should fail when executed outside a guild", async () => {
+  it("ギルド外で実行された場合はエラーを返す", async () => {
     const interaction = createMockInteraction(null);
 
     await handleSettingCommand(interaction, {} as Client);
@@ -60,7 +60,7 @@ describe("Settings Command Backend Handler", () => {
     );
   });
 
-  it("should reply with UI components when executed in a guild", async () => {
+  it("ギルド内で実行された場合はUIコンポーネントで返答する", async () => {
     const interaction = createMockInteraction("guild_123");
 
     await handleSettingCommand(interaction, {} as Client);
@@ -73,7 +73,7 @@ describe("Settings Command Backend Handler", () => {
     );
   });
 
-  it("should handle settings_modal:black_white submit interaction and save to settings.json", async () => {
+  it("settings_modal:black_white送信時にモードが更新されsettings.jsonに保存される", async () => {
     await settingsManager.load();
     const initSettings = settingsManager.getSettings("guild_123");
     expect(initSettings.mode).toBe("blacklist");
@@ -100,7 +100,7 @@ describe("Settings Command Backend Handler", () => {
     );
   });
 
-  it("should handle settings:add interaction and save to settings.json", async () => {
+  it("settings:addインタラクションで項目が追加されsettings.jsonに保存される", async () => {
     await settingsManager.load();
 
     const update = vi.fn().mockResolvedValue(undefined);
@@ -123,7 +123,7 @@ describe("Settings Command Backend Handler", () => {
     );
   });
 
-  it("should handle settings_remove interaction and remove item from settings.json", async () => {
+  it("settings_removeインタラクションで項目が削除されsettings.jsonから除去される", async () => {
     await settingsManager.load();
     const initSettings = settingsManager.getSettings("guild_123");
     initSettings.blacklist.users.push("user_888");
