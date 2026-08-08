@@ -30,7 +30,7 @@ export function isOpenOriginalButton(interaction: Interaction): interaction is B
 }
 
 export function isDeletePreviewButton(interaction: Interaction): interaction is ButtonInteraction {
-  return interaction.isButton() && interaction.customId === "delete_preview"
+  return interaction.isButton() && interaction.customId === "delete_preview";
 }
 
 export function resolveOriginalUrlFromButtonInteraction(interaction: ButtonInteraction): string {

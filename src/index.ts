@@ -1,9 +1,20 @@
-import { ButtonInteraction, type ChatInputCommandInteraction, Client, Events, GatewayIntentBits, MessageFlags } from "discord.js";
+import {
+  ButtonInteraction,
+  type ChatInputCommandInteraction,
+  Client,
+  Events,
+  GatewayIntentBits,
+  MessageFlags,
+} from "discord.js";
 import { config } from "dotenv";
 import { registerMessageCreateEvent } from "./events/messageCreate.ts";
 import { handlePreviewCommand, registerSlashCommands } from "./commands/preview.ts";
 import { handleSettingCommand, handleSettingsInteraction } from "./commands/settings.ts";
-import { isDeletePreviewButton, isOpenOriginalButton, resolveOriginalUrlFromButtonInteraction } from "./utils/buttons.ts";
+import {
+  isDeletePreviewButton,
+  isOpenOriginalButton,
+  resolveOriginalUrlFromButtonInteraction,
+} from "./utils/buttons.ts";
 import { resolveDiscordToken } from "./utils/env.ts";
 
 config();
@@ -60,7 +71,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const previewMsg = interaction.message;
       try {
         const originalMsg = await interaction.message.fetchReference();
-        await originalMsg.delete().catch(() => { });
+        await originalMsg.delete().catch(() => {});
         await previewMsg.delete();
       } catch {
         console.warn("[index] Failed to delete the original message");
