@@ -16,12 +16,14 @@ function createMockInteraction(guildId: string | null = "guild_123") {
   const followUp = vi.fn().mockResolvedValue(undefined);
   const reply = vi.fn().mockResolvedValue(undefined);
   const update = vi.fn().mockResolvedValue(undefined);
+  const showModal = vi.fn().mockResolvedValue(undefined);
 
   return {
     deferReply,
     followUp,
     reply,
     update,
+    showModal,
     guildId,
     guild: null,
   } as unknown as ChatInputCommandInteraction;
@@ -100,27 +102,91 @@ describe("設定コマンド バックエンドハンドラー", () => {
     );
   });
 
-  it("settings:addインタラクションで項目が追加されsettings.jsonに保存される", async () => {
+  it("settings_modal:add:blacklist送信時にモーダルの入力値からアイテムが追加される", async () => {
     await settingsManager.load();
-
     const update = vi.fn().mockResolvedValue(undefined);
-    const mockAddInteraction = {
+    const mockAddModalInteraction = {
       guildId: "guild_123",
-      customId: "settings:add:blacklist:channels",
-      values: ["chan_999"],
+      customId: "settings_modal:add:blacklist",
+      fields: {
+        getTextInputValue: vi.fn((id: string) => {
+          if (id === "add_channels") return "111122223333";
+          if (id === "add_users") return "444455556666";
+          if (id === "add_roles") return "777788889999";
+          return "";
+        }),
+      },
       update,
     } as any;
 
-    await handleSettingsInteraction(mockAddInteraction, {} as Client);
+    await handleSettingsInteraction(mockAddModalInteraction, {} as Client);
 
     const settings = settingsManager.getSettings("guild_123");
-    expect(settings.blacklist.channels).toContain("chan_999");
+    expect(settings.blacklist.channels).toContain("111122223333");
+    expect(settings.blacklist.users).toContain("444455556666");
+    expect(settings.blacklist.roles).toContain("777788889999");
+  });
+
+  it("登録アイテムが0件のときに削除を選択した場合はモーダルを表示せずエラーを返信する", async () => {
+    await settingsManager.load();
+    const reply = vi.fn().mockResolvedValue(undefined);
+    const showModal = vi.fn().mockResolvedValue(undefined);
+
+    const mockSelectDeleteZeroInteraction = {
+      guildId: "guild_123",
+      customId: "settings:select_list:delete:blacklist",
+      reply,
+      showModal,
+    } as any;
+
+    await handleSettingsInteraction(mockSelectDeleteZeroInteraction, {} as Client);
+
+    expect(showModal).not.toHaveBeenCalled();
+    expect(reply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        components: expect.any(Array),
+        flags: expect.arrayContaining([64]),
+      }),
+    );
+  });
+
+  it("項目数が25件を超えた場合フォールバック一覧画面が表示され、番号入力Modal送信で該当アイテムが削除される", async () => {
+    await settingsManager.load();
+    const settings = settingsManager.getSettings("guild_123");
+    // 26個のチャンネルを追加
+    for (let i = 1; i <= 26; i++) {
+      settings.blacklist.channels.push(`channel_${i}`);
+    }
+    await settingsManager.setSettings("guild_123", settings);
+
+    const update = vi.fn().mockResolvedValue(undefined);
+    const mockSelectDeleteInteraction = {
+      guildId: "guild_123",
+      customId: "settings:select_list:delete:blacklist",
+      update,
+    } as any;
+
+    await handleSettingsInteraction(mockSelectDeleteInteraction, {} as Client);
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({
         components: expect.any(Array),
-        flags: expect.arrayContaining([32768]),
       }),
     );
+
+    // 番号指定削除 Modal Submit (1番目の channel_1 を削除)
+    const mockDeleteIndexModalSubmit = {
+      guildId: "guild_123",
+      customId: "settings_modal:delete_by_index:blacklist",
+      fields: {
+        getTextInputValue: vi.fn().mockReturnValue("1"),
+      },
+      update,
+    } as any;
+
+    await handleSettingsInteraction(mockDeleteIndexModalSubmit, {} as Client);
+
+    const updatedSettings = settingsManager.getSettings("guild_123");
+    expect(updatedSettings.blacklist.channels).not.toContain("channel_1");
   });
 
   it("settings_removeインタラクションで項目が削除されsettings.jsonから除去される", async () => {
