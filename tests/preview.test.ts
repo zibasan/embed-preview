@@ -1,5 +1,5 @@
 import type { ChatInputCommandInteraction, Client } from "discord.js";
-import { Routes } from "discord.js";
+import { MessageFlags, Routes } from "discord.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../src/utils/fetcher.ts", () => ({ fetchTargetMessage: vi.fn() }));
@@ -15,6 +15,7 @@ import {
   previewCommand,
   registerSlashCommands,
 } from "../src/commands/preview.ts";
+import { settingCommand } from "../src/commands/settings.ts";
 import { fetchTargetMessage } from "../src/utils/fetcher.ts";
 import { buildPreviewPayload } from "../src/utils/previewCore.ts";
 
@@ -51,7 +52,7 @@ describe("handlePreviewCommand", () => {
 
     expect(interaction.followUp).toHaveBeenCalledWith({
       content: "Invalid message link.",
-      ephemeral: true,
+      flags: [MessageFlags.Ephemeral],
     });
   });
 
@@ -63,7 +64,7 @@ describe("handlePreviewCommand", () => {
 
     expect(interaction.followUp).toHaveBeenCalledWith({
       content: "Message not found.",
-      ephemeral: true,
+      flags: [MessageFlags.Ephemeral],
     });
   });
 
@@ -110,7 +111,7 @@ describe("registerSlashCommands", () => {
 
     expect(restInstance.setToken).toHaveBeenCalledWith("token");
     expect(restInstance.put).toHaveBeenCalledWith(Routes.applicationCommands("app-1"), {
-      body: [previewCommand.toJSON()],
+      body: [previewCommand.toJSON(), settingCommand.toJSON()],
     });
   });
 });
