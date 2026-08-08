@@ -1,9 +1,9 @@
-import { type ChatInputCommandInteraction, Client, Events, GatewayIntentBits } from "discord.js";
+import { ButtonInteraction, type ChatInputCommandInteraction, Client, Events, GatewayIntentBits, MessageFlags } from "discord.js";
 import { config } from "dotenv";
 import { registerMessageCreateEvent } from "./events/messageCreate.ts";
 import { handlePreviewCommand, registerSlashCommands } from "./commands/preview.ts";
 import { handleSettingCommand, handleSettingsInteraction } from "./commands/settings.ts";
-import { isOpenOriginalButton, resolveOriginalUrlFromButtonInteraction } from "./utils/buttons.ts";
+import { isDeletePreviewButton, isOpenOriginalButton, resolveOriginalUrlFromButtonInteraction } from "./utils/buttons.ts";
 import { resolveDiscordToken } from "./utils/env.ts";
 
 config();
@@ -53,7 +53,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (isOpenOriginalButton(interaction)) {
       const originalUrl = resolveOriginalUrlFromButtonInteraction(interaction);
-      await interaction.reply({ content: originalUrl, ephemeral: true });
+      await interaction.reply({ content: originalUrl, flags: [MessageFlags.Ephemeral] });
+    }
+
+    if (isDeletePreviewButton(interaction)) {
+      const previewMsg = interaction.message;
+      try {
+        const originalMsg = await interaction.message.fetchReference();
+        await originalMsg.delete().catch(() => { });
+        await previewMsg.delete();
+      } catch {
+        console.warn("[index] Failed to delete the original message");
+        await previewMsg.delete();
+      }
     }
   } catch (err) {
     console.error("[index] InteractionCreate handler error:", err);
