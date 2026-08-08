@@ -144,6 +144,100 @@ export async function handleSettingCommand(
   }
 }
 
+function extractFieldValues(fields: any, targetCustomId: string): string[] {
+  if (!fields) return [];
+  const results: string[] = [];
+
+  try {
+    if (typeof fields.getChannelSelectMenuValues === "function") {
+      const v = fields.getChannelSelectMenuValues(targetCustomId);
+      if (Array.isArray(v) && v.length > 0) return v;
+    }
+    if (typeof fields.getUserSelectMenuValues === "function") {
+      const v = fields.getUserSelectMenuValues(targetCustomId);
+      if (Array.isArray(v) && v.length > 0) return v;
+    }
+    if (typeof fields.getRoleSelectMenuValues === "function") {
+      const v = fields.getRoleSelectMenuValues(targetCustomId);
+      if (Array.isArray(v) && v.length > 0) return v;
+    }
+    if (typeof fields.getStringSelectMenuValues === "function") {
+      const v = fields.getStringSelectMenuValues(targetCustomId);
+      if (Array.isArray(v) && v.length > 0) return v;
+    }
+    if (typeof fields.getCheckboxGroup === "function") {
+      const v = fields.getCheckboxGroup(targetCustomId);
+      if (Array.isArray(v) && v.length > 0) return v;
+    }
+    if (typeof fields.getCheckboxGroupValues === "function") {
+      const v = fields.getCheckboxGroupValues(targetCustomId);
+      if (Array.isArray(v) && v.length > 0) return v;
+    }
+    if (typeof fields.getTextInputValue === "function") {
+      const v = fields.getTextInputValue(targetCustomId);
+      if (typeof v === "string" && v.length > 0) return [v];
+    }
+  } catch { }
+
+  try {
+    const rawFields = fields.fields || fields.components;
+    if (rawFields) {
+      const list =
+        typeof rawFields.values === "function"
+          ? Array.from(rawFields.values())
+          : Array.isArray(rawFields)
+            ? rawFields
+            : [];
+      for (const item of list as any[]) {
+        if (item && item.customId === targetCustomId) {
+          if (Array.isArray(item.values) && item.values.length > 0) return item.values;
+          if (typeof item.value === "string" && item.value.length > 0) return [item.value];
+          if (Array.isArray(item.selected) && item.selected.length > 0) return item.selected;
+        }
+      }
+    }
+  } catch { }
+
+  try {
+    const directObj = fields[targetCustomId] || fields.getField?.(targetCustomId);
+    if (directObj) {
+      if (Array.isArray(directObj.values)) return directObj.values;
+      if (typeof directObj.value === "string") return [directObj.value];
+    }
+  } catch { }
+
+  return results;
+}
+
+function isConfirmed(fields: any, confirmCustomId: string): boolean {
+  const vals = extractFieldValues(fields, confirmCustomId);
+  if (vals.length > 0) return true;
+
+  try {
+    const rawFields = fields?.fields || fields?.components;
+    if (rawFields) {
+      const list =
+        typeof rawFields.values === "function"
+          ? Array.from(rawFields.values())
+          : Array.isArray(rawFields)
+            ? rawFields
+            : [];
+      for (const item of list as any[]) {
+        if (item && typeof item.customId === "string" && item.customId.includes("confirm")) {
+          if (
+            (Array.isArray(item.values) && item.values.length > 0) ||
+            (typeof item.value === "string" && item.value.length > 0)
+          ) {
+            return true;
+          }
+        }
+      }
+    }
+  } catch { }
+
+  return false;
+}
+
 /**
  * Handles component interactions for adding/removing items to/from whitelist or blacklist,
  * and navigating between settings screens.
@@ -177,8 +271,10 @@ export async function handleSettingsInteraction(interaction: any, _client: Clien
     }
 
     if (typeof customId === "string" && customId === "settings_modal:black_white") {
-      settings.mode = settings.mode === "blacklist" ? "whitelist" : "blacklist";
-      await settingsManager.setSettings(guildId, settings);
+      if (isConfirmed(interaction.fields, "confirm_checkbox")) {
+        settings.mode = settings.mode === "blacklist" ? "whitelist" : "blacklist";
+        await settingsManager.setSettings(guildId, settings);
+      }
 
       const components = buildSettingsComponents(_client, interaction.guild, settings);
       await interaction.update({
@@ -198,16 +294,16 @@ export async function handleSettingsInteraction(interaction: any, _client: Clien
       return;
     }
 
-    // Choose target list
+    // Choose target list (update original message)
     if (
       typeof customId === "string" &&
       (customId === "settings:action_add" || customId === "settings:action_delete")
     ) {
       const action = customId === "settings:action_add" ? "add" : "delete";
       const components = buildSelectTargetListComponents(action);
-      await interaction.reply({
+      await interaction.update({
         components,
-        flags: [MessageFlags.IsComponentsV2, MessageFlags.Ephemeral],
+        flags: [MessageFlags.IsComponentsV2],
       });
       return;
     }
@@ -243,51 +339,42 @@ export async function handleSettingsInteraction(interaction: any, _client: Clien
           return;
         }
 
-        if (totalItems > 25) {
-          const components = await buildDeleteFallbackComponents(
-            listType,
-            settings,
-            interaction.guild,
-          );
-          await interaction.update({
-            components,
-            flags: [MessageFlags.IsComponentsV2],
-          });
-          return;
-        } else {
-          const modal = await buildDeleteModal(listType, settings, interaction.guild);
-          await interaction.showModal(modal);
-          return;
-        }
+        // メイン処理: 番号一覧画面を表示
+        const components = await buildDeleteFallbackComponents(
+          listType,
+          settings,
+          interaction.guild,
+        );
+        await interaction.update({
+          components,
+          flags: [MessageFlags.IsComponentsV2],
+        });
+        return;
       }
     }
 
     // 3. 追加 Modal Submit
     if (typeof customId === "string" && customId.startsWith("settings_modal:add:")) {
       const listType = customId.split(":")[2] as "whitelist" | "blacklist";
-      if (listType && settings[listType]) {
-        if (interaction.fields) {
-          try {
-            const channelsStr = interaction.fields.getTextInputValue("add_channels") || "";
-            const usersStr = interaction.fields.getTextInputValue("add_users") || "";
-            const rolesStr = interaction.fields.getTextInputValue("add_roles") || "";
+      if (listType && settings[listType] && interaction.fields) {
+        const hasConfirm = isConfirmed(interaction.fields, "add_confirm");
 
-            const parseIds = (str: string) => str.match(/\d+/g) || [];
+        if (hasConfirm) {
+          const addedChannels = extractFieldValues(interaction.fields, "add_channels");
+          const addedUsers = extractFieldValues(interaction.fields, "add_users");
+          const addedRoles = extractFieldValues(interaction.fields, "add_roles");
 
-            for (const id of parseIds(channelsStr)) {
-              if (!settings[listType].channels.includes(id)) settings[listType].channels.push(id);
-            }
-            for (const id of parseIds(usersStr)) {
-              if (!settings[listType].users.includes(id)) settings[listType].users.push(id);
-            }
-            for (const id of parseIds(rolesStr)) {
-              if (!settings[listType].roles.includes(id)) settings[listType].roles.push(id);
-            }
-
-            await settingsManager.setSettings(guildId, settings);
-          } catch (e) {
-            console.warn("[settings_modal:add] Error reading fields:", e);
+          for (const id of addedChannels) {
+            if (!settings[listType].channels.includes(id)) settings[listType].channels.push(id);
           }
+          for (const id of addedUsers) {
+            if (!settings[listType].users.includes(id)) settings[listType].users.push(id);
+          }
+          for (const id of addedRoles) {
+            if (!settings[listType].roles.includes(id)) settings[listType].roles.push(id);
+          }
+
+          await settingsManager.setSettings(guildId, settings);
         }
       }
 
@@ -303,34 +390,14 @@ export async function handleSettingsInteraction(interaction: any, _client: Clien
     if (typeof customId === "string" && customId.startsWith("settings_modal:delete:")) {
       const listType = customId.split(":")[2] as "whitelist" | "blacklist";
       if (listType && settings[listType] && interaction.fields) {
-        try {
-          // TextInput または StringSelectMenu から削除値を取り出す
-          const selectedValues: string[] = [];
+        const hasConfirm = isConfirmed(interaction.fields, "delete_confirm");
 
-          // 1) StringSelectMenu からの選択値 (delete_users, delete_roles, delete_channels)
-          try {
-            const usersVal = interaction.fields.getStringSelectMenuValues("delete_users");
-            if (Array.isArray(usersVal)) selectedValues.push(...usersVal);
-          } catch { }
-          try {
-            const rolesVal = interaction.fields.getStringSelectMenuValues("delete_roles");
-            if (Array.isArray(rolesVal)) selectedValues.push(...rolesVal);
-          } catch { }
-          try {
-            const channelsVal = interaction.fields.getStringSelectMenuValues("delete_channels");
-            if (Array.isArray(channelsVal)) selectedValues.push(...channelsVal);
-          } catch { }
-
-          // 2) TextInput からの値
-          try {
-            const textVal = interaction.fields.getTextInputValue("delete_items");
-            if (textVal) {
-              const ids = textVal.match(/\d+/g) || [];
-              for (const id of ids) {
-                selectedValues.push(`:${id}`);
-              }
-            }
-          } catch { }
+        if (hasConfirm) {
+          const selectedValues: string[] = [
+            ...extractFieldValues(interaction.fields, "delete_users"),
+            ...extractFieldValues(interaction.fields, "delete_roles"),
+            ...extractFieldValues(interaction.fields, "delete_channels"),
+          ];
 
           for (const item of selectedValues) {
             const parts = item.split(":");
@@ -342,23 +409,10 @@ export async function handleSettingsInteraction(interaction: any, _client: Clien
                   (existingId) => existingId !== id,
                 );
               }
-            } else if (parts.length === 2 && parts[1]) {
-              const id = parts[1];
-              settings[listType].channels = settings[listType].channels.filter(
-                (existingId) => existingId !== id,
-              );
-              settings[listType].users = settings[listType].users.filter(
-                (existingId) => existingId !== id,
-              );
-              settings[listType].roles = settings[listType].roles.filter(
-                (existingId) => existingId !== id,
-              );
             }
           }
 
           await settingsManager.setSettings(guildId, settings);
-        } catch (e) {
-          console.warn("[settings_modal:delete] Error processing delete fields:", e);
         }
       }
 
@@ -378,43 +432,31 @@ export async function handleSettingsInteraction(interaction: any, _client: Clien
       return;
     }
 
-    // 6. 番号指定削除 Modal Submit
+    // 6. 番号指定削除 Modal Submit (確認画面へ遷移)
     if (typeof customId === "string" && customId.startsWith("settings_modal:delete_by_index:")) {
       const listType = customId.split(":")[2] as "whitelist" | "blacklist";
       if (listType && settings[listType] && interaction.fields) {
-        try {
-          const indexStr = interaction.fields.getTextInputValue("delete_indices") || "";
+        const hasConfirm = isConfirmed(interaction.fields, "delete_confirm");
+
+        if (hasConfirm) {
+          const indexStr =
+            extractFieldValues(interaction.fields, "delete_indices")[0] ||
+            interaction.fields.getTextInputValue?.("delete_indices") ||
+            "";
           const numbers = (indexStr.match(/\d+/g) || []).map(Number);
 
-          // 登録アイテムの一覧マップ（1-based）を生成
-          const allItems: { type: "channels" | "users" | "roles"; id: string }[] = [
-            ...settings[listType].channels.map((id) => ({ type: "channels" as const, id })),
-            ...settings[listType].users.map((id) => ({ type: "users" as const, id })),
-            ...settings[listType].roles.map((id) => ({ type: "roles" as const, id })),
-          ];
-
-          const idsToRemove = new Set<string>();
-          for (const num of numbers) {
-            if (num >= 1 && num <= allItems.length) {
-              const item = allItems[num - 1];
-              if (item) idsToRemove.add(item.id);
-            }
-          }
-
-          if (idsToRemove.size > 0) {
-            settings[listType].channels = settings[listType].channels.filter(
-              (id) => !idsToRemove.has(id),
-            );
-            settings[listType].users = settings[listType].users.filter(
-              (id) => !idsToRemove.has(id),
-            );
-            settings[listType].roles = settings[listType].roles.filter(
-              (id) => !idsToRemove.has(id),
-            );
-            await settingsManager.setSettings(guildId, settings);
-          }
-        } catch (e) {
-          console.warn("[settings_modal:delete_by_index] Error parsing indices:", e);
+          const components = await buildDeleteConfirmComponents(
+            listType,
+            settings,
+            numbers,
+            indexStr,
+            interaction.guild,
+          );
+          await interaction.update({
+            components,
+            flags: [MessageFlags.IsComponentsV2],
+          });
+          return;
         }
       }
 
@@ -423,6 +465,57 @@ export async function handleSettingsInteraction(interaction: any, _client: Clien
         components,
         flags: [MessageFlags.IsComponentsV2],
       });
+      return;
+    }
+
+    // 7. 削除確認画面の Yes ボタン押下 (実際の削除実行)
+    if (typeof customId === "string" && customId.startsWith("settings:confirm_delete_yes:")) {
+      const parts = customId.split(":");
+      const listType = parts[2] as "whitelist" | "blacklist";
+      const indicesStr = parts[3] || "";
+      const numbers = (indicesStr.match(/\d+/g) || []).map(Number);
+
+      if (listType && settings[listType]) {
+        const allItems: { type: "channels" | "users" | "roles"; id: string }[] = [
+          ...settings[listType].users.map((id) => ({ type: "users" as const, id })),
+          ...settings[listType].roles.map((id) => ({ type: "roles" as const, id })),
+          ...settings[listType].channels.map((id) => ({ type: "channels" as const, id })),
+        ];
+
+        const idsToRemove = new Set<string>();
+        for (const num of numbers) {
+          if (num >= 1 && num <= allItems.length) {
+            const item = allItems[num - 1];
+            if (item) idsToRemove.add(item.id);
+          }
+        }
+
+        if (idsToRemove.size > 0) {
+          settings[listType].channels = settings[listType].channels.filter(
+            (id) => !idsToRemove.has(id),
+          );
+          settings[listType].users = settings[listType].users.filter((id) => !idsToRemove.has(id));
+          settings[listType].roles = settings[listType].roles.filter((id) => !idsToRemove.has(id));
+          await settingsManager.setSettings(guildId, settings);
+        }
+      }
+
+      const components = buildSettingsComponents(_client, interaction.guild, settings);
+      await interaction.update({
+        components,
+        flags: [MessageFlags.IsComponentsV2],
+      });
+      return;
+    }
+
+    // 8. 削除確認画面の Cancel ボタン押下 (入力値を復元してモーダルを再表示)
+    if (typeof customId === "string" && customId.startsWith("settings:confirm_delete_cancel:")) {
+      const parts = customId.split(":");
+      const listType = parts[2] as "whitelist" | "blacklist";
+      const indicesStr = parts[3] || "";
+
+      const modal = buildDeleteByIndexModal(listType, indicesStr);
+      await interaction.showModal(modal);
       return;
     }
 
@@ -571,6 +664,7 @@ export function buildSelectTargetListComponents(action: "add" | "delete"): any[]
   );
 
   container.addActionRowComponents(listButtonsRow);
+  container.addActionRowComponents(backButtonRow);
 
   return [container];
 }
@@ -719,9 +813,13 @@ export async function buildDeleteModal(
       .setCustomId("delete_users")
       .setPlaceholder("@foo, @bar, ...")
       .setMaxValues(Math.min(userOptions.length, 25))
-      .setMinValues(0)
+      .setMinValues(1)
       .setRequired(false)
       .setOptions(userOptions);
+    console.log(JSON.stringify(userSelect.data), "\n\n", JSON.stringify(userSelect.options));
+    console.log(
+      `userSelect: min -> ${userSelect.data.min_values}, max -> ${userSelect.data.max_values}`,
+    );
 
     modal.addLabelComponents(
       new LabelBuilder().setLabel("Users").setStringSelectMenuComponent(userSelect),
@@ -733,7 +831,7 @@ export async function buildDeleteModal(
       .setCustomId("delete_roles")
       .setPlaceholder("@everyone, @moderators, ...")
       .setMaxValues(Math.min(roleOptions.length, 25))
-      .setMinValues(0)
+      .setMinValues(1)
       .setRequired(false)
       .setOptions(roleOptions);
 
@@ -747,7 +845,7 @@ export async function buildDeleteModal(
       .setCustomId("delete_channels")
       .setPlaceholder("#general, #rule, ...")
       .setMaxValues(Math.min(channelOptions.length, 25))
-      .setMinValues(0)
+      .setMinValues(1)
       .setRequired(false)
       .setOptions(channelOptions);
 
@@ -837,17 +935,16 @@ export async function buildDeleteFallbackComponents(
     textList += `**Channels:**\n\`\`\`\n${channelLines.join("\n")}\n\`\`\`\n\n`;
   }
 
-  textList += `-# Total items exceed 25. Please use the button below to delete by item numbers.`;
-
   container.addTextDisplayComponents(new TextDisplayBuilder().setContent(textList));
 
   const promptButtonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId(`settings:prompt_delete_index:${listType}`)
-      .setLabel("Delete by Item Numbers")
+      .setLabel("Select the items to delete")
       .setStyle(ButtonStyle.Danger),
   );
 
+  container.addActionRowComponents(backButtonRow);
   container.addActionRowComponents(promptButtonRow);
 
   return [container];
@@ -856,22 +953,29 @@ export async function buildDeleteFallbackComponents(
 /**
  * Builds the modal for deleting items by index numbers (#1, #2...)
  */
-export function buildDeleteByIndexModal(listType: "whitelist" | "blacklist"): ModalBuilder {
+export function buildDeleteByIndexModal(
+  listType: "whitelist" | "blacklist",
+  initialValue?: string,
+): ModalBuilder {
+  const indexInput = new TextInputBuilder()
+    .setCustomId("delete_indices")
+    .setMinLength(1)
+    .setRequired(true)
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder("1, 2, 4, 6, ...");
+
+  if (initialValue) {
+    indexInput.setValue(initialValue);
+  }
+
   const modal = new ModalBuilder()
     .setTitle(`Delete by Numbers (${listType})`)
     .setCustomId(`settings_modal:delete_by_index:${listType}`)
     .setLabelComponents(
       new LabelBuilder()
-        .setLabel('Please enter the number of the item you want to delete.')
-        .setDescription('e.g. 1, 2, 4, 6, ...')
-        .setTextInputComponent(
-          new TextInputBuilder()
-            .setCustomId('delete_indices')
-            .setMinLength(1)
-            .setRequired(true)
-            .setStyle(TextInputStyle.Short)
-            .setPlaceholder('1, 2, 4, 6, ...')
-        ),
+        .setLabel("Enter the item number you want to delete.")
+        .setDescription("e.g. 1, 2, 4, 6, ...")
+        .setTextInputComponent(indexInput),
       new LabelBuilder()
         .setLabel("Are you sure you want to delete these?")
         .setCheckboxGroupComponent(
@@ -887,6 +991,75 @@ export function buildDeleteByIndexModal(listType: "whitelist" | "blacklist"): Mo
     );
 
   return modal;
+}
+
+/**
+ * Builds the confirmation message UI before executing index-based deletion.
+ */
+export async function buildDeleteConfirmComponents(
+  listType: "whitelist" | "blacklist",
+  settings: GuildSettings,
+  numbers: number[],
+  indicesStr: string,
+  guild?: any,
+): Promise<any[]> {
+  const container = new ContainerBuilder().setAccentColor(0xed4245);
+  const targetList = settings[listType];
+
+  const allItems: { type: "channels" | "users" | "roles"; id: string; num: number }[] = [];
+  let index = 1;
+  for (const id of targetList.users) allItems.push({ type: "users", id, num: index++ });
+  for (const id of targetList.roles) allItems.push({ type: "roles", id, num: index++ });
+  for (const id of targetList.channels) allItems.push({ type: "channels", id, num: index++ });
+
+  const selectedItems = allItems.filter((item) => numbers.includes(item.num));
+
+  const lines: string[] = [];
+  for (const item of selectedItems) {
+    let name = item.id;
+    if (guild) {
+      try {
+        if (item.type === "users") {
+          const member =
+            guild.members?.cache?.get(item.id) ||
+            (await guild.members?.fetch(item.id).catch(() => null));
+          if (member) name = member.user?.username || member.displayName || item.id;
+        } else if (item.type === "roles") {
+          const role =
+            guild.roles?.cache?.get(item.id) ||
+            (await guild.roles?.fetch(item.id).catch(() => null));
+          if (role) name = role.name || item.id;
+        } else if (item.type === "channels") {
+          const ch =
+            guild.channels?.cache?.get(item.id) ||
+            (await guild.channels?.fetch(item.id).catch(() => null));
+          if (ch) name = ch.name || item.id;
+        }
+      } catch { }
+    }
+    const prefix = item.type === "channels" ? "#" : "@";
+    lines.push(`• #${item.num} ${prefix}${name} (${item.id})`);
+  }
+
+  let text = `## ⚠️ Confirmation\nRemove these users, roles, and channels from the list. Are you sure?\n\n**Items for deletion:**\n\`\`\`\n`;
+  text += lines.length > 0 ? lines.join("\n") : "No matching items were found.";
+  text += `\n\`\`\``;
+
+  container.addTextDisplayComponents(new TextDisplayBuilder().setContent(text));
+
+  const buttonsRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`settings:confirm_delete_yes:${listType}:${indicesStr}`)
+      .setLabel("Yes")
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId(`settings:confirm_delete_cancel:${listType}:${indicesStr}`)
+      .setLabel("Cancel")
+      .setStyle(ButtonStyle.Secondary),
+  );
+
+  container.addActionRowComponents(buttonsRow);
+  return [container];
 }
 
 /**

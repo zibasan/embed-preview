@@ -86,6 +86,7 @@ describe("設定コマンド バックエンドハンドラー", () => {
       customId: "settings_modal:black_white",
       fields: {
         getTextInputValue: vi.fn().mockReturnValue("whitelist"),
+        getCheckboxGroup: vi.fn().mockReturnValue(["Yes"]),
       },
       update,
     } as any;
@@ -109,12 +110,16 @@ describe("設定コマンド バックエンドハンドラー", () => {
       guildId: "guild_123",
       customId: "settings_modal:add:blacklist",
       fields: {
-        getTextInputValue: vi.fn((id: string) => {
-          if (id === "add_channels") return "111122223333";
-          if (id === "add_users") return "444455556666";
-          if (id === "add_roles") return "777788889999";
-          return "";
-        }),
+        getCheckboxGroup: vi.fn().mockReturnValue(["Yes"]),
+        getChannelSelectMenuValues: vi.fn((id: string) =>
+          id === "add_channels" ? ["111122223333"] : [],
+        ),
+        getUserSelectMenuValues: vi.fn((id: string) =>
+          id === "add_users" ? ["444455556666"] : [],
+        ),
+        getRoleSelectMenuValues: vi.fn((id: string) =>
+          id === "add_roles" ? ["777788889999"] : [],
+        ),
       },
       update,
     } as any;
@@ -150,16 +155,15 @@ describe("設定コマンド バックエンドハンドラー", () => {
     );
   });
 
-  it("項目数が25件を超えた場合フォールバック一覧画面が表示され、番号入力Modal送信で該当アイテムが削除される", async () => {
+  it("番号一覧画面が表示され、番号入力Modal送信後に確認画面を経てYes押下で該当アイテムが削除される", async () => {
     await settingsManager.load();
     const settings = settingsManager.getSettings("guild_123");
-    // 26個のチャンネルを追加
-    for (let i = 1; i <= 26; i++) {
-      settings.blacklist.channels.push(`channel_${i}`);
-    }
+    settings.blacklist.channels.push("channel_target_1");
     await settingsManager.setSettings("guild_123", settings);
 
     const update = vi.fn().mockResolvedValue(undefined);
+    const showModal = vi.fn().mockResolvedValue(undefined);
+
     const mockSelectDeleteInteraction = {
       guildId: "guild_123",
       customId: "settings:select_list:delete:blacklist",
@@ -173,20 +177,46 @@ describe("設定コマンド バックエンドハンドラー", () => {
       }),
     );
 
-    // 番号指定削除 Modal Submit (1番目の channel_1 を削除)
+    // 1. 番号指定削除 Modal Submit (確認画面へ遷移)
     const mockDeleteIndexModalSubmit = {
       guildId: "guild_123",
       customId: "settings_modal:delete_by_index:blacklist",
       fields: {
-        getTextInputValue: vi.fn().mockReturnValue("1"),
+        getCheckboxGroup: vi.fn((id: string) => (id === "delete_confirm" ? ["Yes"] : [])),
+        getTextInputValue: vi.fn((id: string) => (id === "delete_indices" ? "1" : "")),
       },
       update,
     } as any;
 
     await handleSettingsInteraction(mockDeleteIndexModalSubmit, {} as Client);
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        components: expect.any(Array),
+      }),
+    );
+
+    // 2. Cancel ボタン押下時、モーダルが入力値付きで再表示されること
+    const mockCancelInteraction = {
+      guildId: "guild_123",
+      customId: "settings:confirm_delete_cancel:blacklist:1",
+      showModal,
+      update,
+    } as any;
+
+    await handleSettingsInteraction(mockCancelInteraction, {} as Client);
+    expect(showModal).toHaveBeenCalled();
+
+    // 3. Yes ボタン押下時、実際の削除が完了すること
+    const mockYesInteraction = {
+      guildId: "guild_123",
+      customId: "settings:confirm_delete_yes:blacklist:1",
+      update,
+    } as any;
+
+    await handleSettingsInteraction(mockYesInteraction, {} as Client);
 
     const updatedSettings = settingsManager.getSettings("guild_123");
-    expect(updatedSettings.blacklist.channels).not.toContain("channel_1");
+    expect(updatedSettings.blacklist.channels).not.toContain("channel_target_1");
   });
 
   it("settings_removeインタラクションで項目が削除されsettings.jsonから除去される", async () => {
